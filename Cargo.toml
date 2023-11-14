@@ -1,0 +1,13 @@
+[package]
+name = "motex"
+version = "0.1.0"
+authors = ["Parker Burnett <burnettparker@gmail.com>"]
+edition = "2021"
+rust-version = "1.70"
+publish = false
+
+[dependencies]
+eframe = { version = "0.23.0", features = ["persistence"] }
+env_logger = "0.10"
+variant_count = "1.1"
+image = "0.24.7"
