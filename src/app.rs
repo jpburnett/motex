@@ -1,5 +1,5 @@
-use crate::n64_graphics::textures;
 /// App.rs
+use crate::n64_graphics::textures;
 use eframe::egui::{self, CentralPanel};
 pub struct Motex {
     selected: usize,
@@ -25,6 +25,9 @@ impl eframe::App for Motex {
         egui::TopBottomPanel::top("top_bar").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("File", |ui| {
+                    if ui.button("Open").clicked() {
+                        // TODO: Open a file...
+                    }
                     if ui.button("Quit").clicked() {
                         frame.close();
                     }

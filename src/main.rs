@@ -2,6 +2,7 @@
 
 mod app;
 mod n64_graphics;
+mod files;
 
 use app::Motex;
 
