@@ -2,8 +2,9 @@
 ///
 use variant_count::VariantCount;
 
-#[derive(VariantCount)]
+#[derive(Default, VariantCount, Debug, PartialEq, Eq)]
 pub enum N64Codec {
+    #[default]
     RGBA16,
     RGBA32,
     IA16,
