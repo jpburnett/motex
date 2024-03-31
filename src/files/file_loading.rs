@@ -1,6 +1,5 @@
 use std::{
     io::{self, Write, Read, Cursor},
-    path::Path,
 };
 use byteorder::{BigEndian, ReadBytesExt};
 use anyhow::Result;
@@ -8,18 +7,18 @@ use anyhow::Result;
 use crate::n64_graphics::textures;
 
 #[derive(Default)]
-pub struct N64Image {
-    format: textures::N64Codec,
+pub struct ImageData {
+    format: textures::ImgFormat,
     pub width: usize,
     pub height: usize,
     data: Vec<u8>,
 }
 
-impl N64Image {
+impl ImageData {
     /// Load an image from a file.
     pub fn read<R: Read>(
         mut reader: R,
-        format: textures::N64Codec,
+        format: textures::ImgFormat,
         width: usize,
         height: usize,
     ) -> Result<Self, std::io::Error> {
@@ -39,8 +38,7 @@ impl N64Image {
         let mut cursor = Cursor::new(&self.data);
 
         match self.format {
-
-            textures::N64Codec::I4 => {
+            textures::ImgFormat::I4 => {
                 for _h in 0..self.height {
                     // Each row is 1/2 the width in bytes
                     // Each pixel is 4 bits, so 2 pixels per byte
@@ -58,7 +56,7 @@ impl N64Image {
                 }
             }
 
-            textures::N64Codec::I8 => {
+            textures::ImgFormat::I8 => {
                 for _h in 0..self.height {
                     for _w in 0..self.width {
                         let intensity = cursor.read_u8()?;
@@ -67,11 +65,21 @@ impl N64Image {
                 }
             }
 
-            textures::N64Codec::RGBA32 => {
+            textures::ImgFormat::RGBA32 => {
                 for _h in 0..self.height {
                     for _w in 0..self.width {
                         let pixel = cursor.read_u32::<BigEndian>()?;
-                        let color = textures::Color::from_u32(pixel);
+                        let color = textures::Color::rgba_from_u32(pixel);
+                        writer.write_all(&[color.r, color.g, color.b, color.a])?;
+                    }
+                }
+            }
+            
+            textures::ImgFormat::RGBA16 => {
+                for _h in 0..self.height {
+                    for _w in 0..self.width {
+                        let pixel = cursor.read_u16::<BigEndian>()?;
+                        let color = textures::Color::from_u16(pixel);
                         writer.write_all(&[color.r, color.g, color.b, color.a])?;
                     }
                 }

@@ -6,7 +6,6 @@ use std::{
 
 use anyhow::Error;
 
-
 #[derive(Debug, Default)]
 pub struct BinFile {
     pub path: PathBuf,

@@ -1,2 +1,2 @@
-pub(crate) mod file_loading;
-pub(crate) mod bin_handler;
+pub mod file_loading;
+pub mod bin_handler;
