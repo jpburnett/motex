@@ -8,13 +8,16 @@ publish = false
 readme = "README.md"
 
 [dependencies]
-eframe = { version = "0.27.1", features = ["persistence"] }
+eframe = { version = "0.27.2", features = ["persistence"] }
 egui-modal = "0.3.6"
 egui-phosphor = "0.4.0"
-egui_extras = { version = "0.27.1" , features = ["all_loaders"]}
+egui_extras = { version = "0.27.2" , features = ["all_loaders"]}
 env_logger = "0.11.3"
 variant_count = "1.1.0"
-image = "0.25.0"
+image = "0.25.1"
 anyhow = "1.0.81"
 byteorder = "1.5.0"
 rfd = "0.14.1"
+pigment64 = "0.4.5"
+strum = "0.26.2"
+strum_macros = "0.26.2"
