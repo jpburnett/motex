@@ -3,4 +3,4 @@
 pub mod files;
 
 // Re-export items for convenient access
-pub use files::bin_handler::{BinFile, read_file_bytes};
+pub use files::bin_handler::{read_file_bytes, BinFile};

@@ -15,9 +15,9 @@ fn main() {
     let _ = eframe::run_native(
         "Motex",
         native_options,
-        Box::new(|cc|{
+        Box::new(|cc| {
             egui_extras::install_image_loaders(&cc.egui_ctx);
-            Box::new(Motex::new(cc))
+            Ok(Box::new(Motex::new(cc)))
         }),
     );
 }

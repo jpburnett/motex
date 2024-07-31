@@ -1,21 +1,23 @@
 /// App.rs
 use anyhow::Result;
-use eframe::egui::{self, CentralPanel, TopBottomPanel, ViewportCommand};
-use std::path::{
-    Path,
-    PathBuf,
+use eframe::egui::{
+    self, CentralPanel, ColorImage, SidePanel, TextureHandle, TopBottomPanel, ViewportCommand,
 };
+use std::path::{Path, PathBuf};
 
 use crate::files::bin_handler::BinFile;
-// Used for texture 
-use pigment64::{
-    NativeImage,
-    ImageType
-};
+// Used for texture
+use pigment64::{ImageType, NativeImage};
 use strum::IntoEnumIterator;
 
+pub struct ImagePreviewer {
+    texture: Option<TextureHandle>,
+    image: Option<ColorImage>,
+}
+
+impl ImagePreviewer {}
+
 /// The main application struct.
-///
 pub struct Motex {
     /// The selected codec.
     selected: ImageType,
@@ -26,6 +28,8 @@ pub struct Motex {
     /// The data from the currently open file.
     file_data: Vec<u8>,
     image: NativeImage,
+
+    /// Flag indicating if the About window is open, true if open, false if closed.
     show_about_open: bool,
 }
 
@@ -40,7 +44,13 @@ impl Motex {
                 Default::default(),
             ),
             file_data: vec![],
-            image: NativeImage{format: ImageType::I1, width: 0, height: 0, data: vec![]},
+            image: NativeImage {
+                format: ImageType::I1,
+                width: 0,
+                height: 0,
+                data: vec![],
+            },
+            // image_previewer: ImagePreviewer::new(),
             show_about_open: false,
         }
     }
@@ -56,16 +66,83 @@ impl Motex {
         Ok(())
     }
 
+    fn render_image_format_buttons(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Image Formats");
+
+        let button_size = egui::vec2(50.0, 30.0);
+        let highlight_color = egui::Color32::from_rgb(0, 100, 255);
+
+        egui::Grid::new("image_format_grid")
+            .num_columns(4) // Adjust this number to change the number of columns
+            .spacing([4.0, 4.0])
+            .show(ui, |ui| {
+                for (index, img_type) in ImageType::iter().enumerate() {
+                    let button = ui.add_sized(
+                        button_size,
+                        egui::Button::new(format!("{:?}", img_type)).fill(
+                            if self.selected == img_type {
+                                highlight_color
+                            } else {
+                                egui::Color32::TRANSPARENT
+                            },
+                        ),
+                    );
+
+                    if button.clicked() {
+                        self.update_image_format(img_type);
+                    }
+
+                    if (index + 1) % 4 == 0 {
+                        ui.end_row();
+                    }
+                }
+            });
+    }
+
+    fn update_image_format(&mut self, img_type: ImageType) {
+        self.selected = img_type;
+        self.image.format = img_type;
+        println!("Option Selected: {:?}", img_type);
+    }
+
+    fn render_left_panel(&mut self, ctx: &egui::Context) {
+        SidePanel::left("left_panel")
+            .resizable(false)
+            .default_width(200.0)
+            .show(ctx, |ui| {
+                ui.vertical_centered(|ui| {
+                    self.render_left_panel_content(ui);
+                });
+            });
+    }
+
+    fn render_left_panel_content(&mut self, ui: &mut egui::Ui) {
+        self.render_image_format_buttons(ui);
+    }
+
+    fn render_right_panel(&self, ctx: &egui::Context) {
+        SidePanel::right("right_panel")
+            .resizable(false)
+            .default_width(200.0)
+            .show(ctx, |ui| {
+                ui.vertical_centered(|ui| {
+                    ui.heading("Right Panel");
+                    self.render_right_panel_content(ui);
+                });
+            });
+    }
+
+    fn render_right_panel_content(&self, ui: &mut egui::Ui) {
+        ui.label(format!("File data size: {:#X}", self.file_data.len()));
+        // TODO: Parker -- Add a function to decode data here
+    }
+
     /// Opens the About window and renders the contents of the window
     ///
     ///  ### Args
     /// * `self` - Motex struct
     /// * `ctx` - egui context
-    fn about_window(
-        &mut self,
-        ctx: &egui::Context,
-    )
-    {
+    fn about_window(&mut self, ctx: &egui::Context) {
         egui::Window::new("About")
             .open(&mut self.show_about_open)
             .default_open(true)
@@ -75,39 +152,17 @@ impl Motex {
             });
     }
 
-}
-
-fn image_type_to_str(img_type: ImageType) -> String {
-    match img_type {
-        ImageType::Rgba16 => "RGBA16",
-        ImageType::Rgba32 => "RGBA32",
-        ImageType::Ia16 => "IA16",
-        ImageType::Ia8 => "IA8",
-        ImageType::Ia4 => "IA4",
-        ImageType::I8 => "I8",
-        ImageType::I4 => "I4",
-        ImageType::Ci8 => "CI8",
-        ImageType::Ci4 => "CI4",
-        ImageType::I1 => "OneBPP"
-    }.to_string()
-}
-
-impl eframe::App for Motex {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Menu Bar
+    fn create_top_bar(&mut self, ctx: &egui::Context) {
         TopBottomPanel::top("top_bar").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("File", |ui| {
                     if ui.button("Open").clicked() {
                         if let Some(path) = rfd::FileDialog::new().pick_file() {
                             let _ = self.open_file(&path);
-                            
-                            self.image = NativeImage::read(
-                                &self.file_data[..],
-                                self.selected,
-                                32,
-                                32,
-                            ).unwrap()
+
+                            self.image =
+                                NativeImage::read(&self.file_data[..], self.selected, 32, 32)
+                                    .unwrap()
                         }
 
                         ui.close_menu();
@@ -117,56 +172,37 @@ impl eframe::App for Motex {
                     }
                 });
 
-                if ui.button("About").clicked(){
+                if ui.button("About").clicked() {
                     // .on_hover_text("Show about dialog");
                     self.show_about_open = !self.show_about_open;
                 }
             });
         });
+    }
+}
+
+impl eframe::App for Motex {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Menu Bar
+        self.create_top_bar(ctx);
+
+        self.render_left_panel(ctx);
+
+        self.render_right_panel(ctx);
 
         // Main panel
         CentralPanel::default().show(ctx, |ui| {
-            egui::ComboBox::from_id_source("image_formats")
-                .selected_text(image_type_to_str(self.selected))
-                .show_ui(ui, |ui| {
-                    for img_type in ImageType::iter() {
-                        if ui.selectable_value(
-                            &mut self.selected,
-                            img_type,
-                            image_type_to_str(img_type),
-                        )
-                            .clicked()
-                        {
-                            // Debug printing
-                            self.image.format = self.selected;
-                            println!("Option Selected: {}", image_type_to_str(img_type));
-                        }
-                    }
-                });
-
-            // Right panel -- image data / preview will live here
-            egui::SidePanel::right("right_panel")
-                .resizable(false)
-                .default_width(200.0)
-                .show_inside(ui, |ui| {
-                    ui.vertical_centered(|ui| {
-                        ui.heading("Right Panel");
-                        ui.label(format!("File data size: {:#X}", self.file_data.len()));
-                        // TODO: Parker -- Add a function to decode data here?
-                        let mut decoded_data: Vec<u8> = vec![];
-                        let _ = self.image.decode(&mut decoded_data, None);
-                        self.texture.set(
-                            egui::ColorImage::from_rgba_unmultiplied(
-                                [self.image.width as usize, self.image.height as usize],
-                                &decoded_data,
-                            ),
-                            Default::default(),
-                        );
-                        ui.image(&self.texture);
-                    });
-                    
-                });
-            
+            // Display the texture for a 32 x 32 image
+            let mut decoded_data: Vec<u8> = vec![];
+            let _ = self.image.decode(&mut decoded_data, None);
+            self.texture.set(
+                egui::ColorImage::from_rgba_unmultiplied(
+                    [self.image.width as usize, self.image.height as usize],
+                    &decoded_data,
+                ),
+                Default::default(),
+            );
+            ui.image(&self.texture);
         });
 
         // Bottom panel

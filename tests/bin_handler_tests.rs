@@ -3,7 +3,7 @@
 #[cfg(test)]
 
 mod tests {
-    use motex::{BinFile, read_file_bytes};
+    use motex::{read_file_bytes, BinFile};
     use std::path::Path;
 
     #[test]

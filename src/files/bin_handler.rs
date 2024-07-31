@@ -1,10 +1,10 @@
 use std::{
     fs::File,
     io::{BufReader, Read},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
-use anyhow::Error;
+use anyhow::{Context, Result};
 
 #[derive(Debug, Default)]
 pub struct BinFile {
@@ -12,37 +12,25 @@ pub struct BinFile {
     pub data: Vec<u8>,
 }
 
-pub fn read_file_bytes<P: Into<PathBuf>>(path: P) -> Result<Vec<u8>, Error> {
-    let file = match File::open(path.into()) {
-        Ok(file) => file,
-        Err(_error) => {
-            return Err(Error::msg("Failed to open file"));
-        }
-    };
+pub fn read_file_bytes<P: AsRef<Path>>(path: P) -> Result<Vec<u8>> {
+    let file = File::open(path.as_ref())
+        .with_context(|| format!("Failed to open file: {}", path.as_ref().display()))?;
 
     let mut buf_reader = BufReader::new(file);
     let mut buffer = Vec::new();
 
-    let _ = buf_reader
+    buf_reader
         .read_to_end(&mut buffer)
-        .or(Err(Error::msg("Failed to read file")));
+        .with_context(|| format!("Failed to read file: {}", path.as_ref().display()))?;
 
     Ok(buffer)
 }
 
 impl BinFile {
-    pub fn from_path<P: Into<PathBuf>>(path: P) -> Result<Self, Error> {
-        let path: PathBuf = path.into();
-        let data = match read_file_bytes(&path) {
-            Ok(data) => data,
-            Err(e) => return Err(e),
-        };
+    pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let path = path.as_ref().to_path_buf();
+        let data = read_file_bytes(&path)?;
 
-        let ret = Self {
-            path: path.clone(),
-            data,
-        };
-
-        Ok(ret)
+        Ok(Self { path, data })
     }
 }
