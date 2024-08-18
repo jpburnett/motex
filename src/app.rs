@@ -1,8 +1,10 @@
 /// App.rs
 use anyhow::Result;
 use eframe::egui::{
-    self, CentralPanel, ColorImage, SidePanel, TextureHandle, TopBottomPanel, ViewportCommand,
+    self, CentralPanel, Color32, Sense, SidePanel, TextureHandle, TopBottomPanel, Vec2,
+    ViewportCommand,
 };
+use open;
 use std::path::{Path, PathBuf};
 
 use crate::files::bin_handler::BinFile;
@@ -10,27 +12,22 @@ use crate::files::bin_handler::BinFile;
 use pigment64::{ImageType, NativeImage};
 use strum::IntoEnumIterator;
 
-pub struct ImagePreviewer {
-    texture: Option<TextureHandle>,
-    image: Option<ColorImage>,
-}
-
-impl ImagePreviewer {}
-
 /// The main application struct.
 pub struct Motex {
     /// The selected codec.
     selected: ImageType,
     /// The texture to display.
-    texture: egui::TextureHandle,
+    texture: TextureHandle,
     /// The file that is opened.
     file_path: PathBuf,
     /// The data from the currently open file.
     file_data: Vec<u8>,
     image: NativeImage,
+    hover_color: Option<egui::Color32>,
 
     /// Flag indicating if the About window is open, true if open, false if closed.
     show_about_open: bool,
+    error_message: Option<String>,
 }
 
 impl Motex {
@@ -50,8 +47,9 @@ impl Motex {
                 height: 0,
                 data: vec![],
             },
-            // image_previewer: ImagePreviewer::new(),
+            hover_color: None,
             show_about_open: false,
+            error_message: None,
         }
     }
 
@@ -99,6 +97,33 @@ impl Motex {
             });
     }
 
+    fn render_color_info(&self, ui: &mut egui::Ui) {
+        ui.heading("Color Info");
+
+        if let Some(color) = self.hover_color {
+            let (r, g, b, a) = color.to_tuple();
+
+            // Display hex representation
+            ui.label(format!("Hex: #{:02X}{:02X}{:02X}{:02X}", r, g, b, a));
+
+            // Display individual R, G, B, A values
+            ui.label(format!("R: {}", r));
+            ui.label(format!("G: {}", g));
+            ui.label(format!("B: {}", b));
+            ui.label(format!("A: {}", a));
+
+            // Display color preview
+            let color_preview_size = Vec2::new(30.0, 30.0);
+            let (rect, _response) = ui.allocate_exact_size(color_preview_size, Sense::hover());
+            ui.painter().rect_filled(rect, 0.0, color);
+
+            // Optional: Add a border around the color preview
+            ui.painter().rect_stroke(rect, 0.0, (1.0, Color32::BLACK));
+        } else {
+            ui.label("Hover over the image to see color info");
+        }
+    }
+
     fn update_image_format(&mut self, img_type: ImageType) {
         self.selected = img_type;
         self.image.format = img_type;
@@ -118,6 +143,7 @@ impl Motex {
 
     fn render_left_panel_content(&mut self, ui: &mut egui::Ui) {
         self.render_image_format_buttons(ui);
+        self.render_color_info(ui);
     }
 
     fn render_right_panel(&self, ctx: &egui::Context) {
@@ -134,7 +160,7 @@ impl Motex {
 
     fn render_right_panel_content(&self, ui: &mut egui::Ui) {
         ui.label(format!("File data size: {:#X}", self.file_data.len()));
-        // TODO: Parker -- Add a function to decode data here
+        // TODO: Add a function to decode data here...
     }
 
     /// Opens the About window and renders the contents of the window
@@ -142,42 +168,80 @@ impl Motex {
     ///  ### Args
     /// * `self` - Motex struct
     /// * `ctx` - egui context
-    fn about_window(&mut self, ctx: &egui::Context) {
+    fn show_about_window(&mut self, ctx: &egui::Context) {
         egui::Window::new("About")
             .open(&mut self.show_about_open)
             .default_open(true)
             .show(ctx, |ui| {
-                ui.label("New Window!");
-                ui.image(egui::include_image!("../assets/purplefrog-bg-512.png"));
+                ui.vertical_centered(|ui| {
+                    ui.image(egui::include_image!("../assets/purplefrog-bg-512.png"));
+                    ui.add_space(20.0);
+                    ui.label("Motex");
+                    ui.label(format!("Version: {}", env!("CARGO_PKG_VERSION")));
+                    ui.add_space(10.0);
+                    ui.label("© 2024 Ampier / Decompals");
+                    if ui.link("GitHub Repo").clicked() {
+                        if let Err(e) = open::that("https://github.com/jpburnett/motex") {
+                            eprintln!("Failed to open URL: {}", e);
+                            println!("Opening URL in browser");
+                        }
+                    }
+                });
             });
     }
 
+    /// Creates and displays the top bar menu of the application.
+    ///  ### Args
+    /// * `self` - Motex struct
+    /// * `ctx` - egui context
     fn create_top_bar(&mut self, ctx: &egui::Context) {
         TopBottomPanel::top("top_bar").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("File", |ui| {
-                    if ui.button("Open").clicked() {
-                        if let Some(path) = rfd::FileDialog::new().pick_file() {
-                            let _ = self.open_file(&path);
-
-                            self.image =
-                                NativeImage::read(&self.file_data[..], self.selected, 32, 32)
-                                    .unwrap()
-                        }
-
+                    if ui.add(egui::Button::new("Open")).clicked() {
+                        self.open_file_dialog();
                         ui.close_menu();
                     }
-                    if ui.button("Quit").clicked() {
-                        ctx.send_viewport_cmd(ViewportCommand::Close)
+                    if ui.add(egui::Button::new("Quit")).clicked() {
+                        ctx.send_viewport_cmd(ViewportCommand::Close);
                     }
                 });
 
-                if ui.button("About").clicked() {
-                    // .on_hover_text("Show about dialog");
-                    self.show_about_open = !self.show_about_open;
+                if ui.add(egui::Button::new("About")).clicked() {
+                    self.show_about_open = true;
                 }
             });
         });
+    }
+
+    fn open_file_dialog(&mut self) {
+        if let Some(path) = rfd::FileDialog::new().pick_file() {
+            match self.open_file(&path) {
+                Ok(()) => {
+                    match NativeImage::read(&self.file_data[..], self.selected, 32, 32) {
+                        Ok(image) => {
+                            self.image = image;
+                            self.error_message = None; // Clear any previous error
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to read image: {}", e);
+                            self.error_message = Some(format!("Failed to read image: {}", e));
+                            // Optionally, there could be a blank image here?
+                            // self.image = NativeImage {
+                            //     format: ImageType::default(), // Assuming ImageType has a default
+                            //     width: 32,
+                            //     height: 32,
+                            //     data: vec![0; 32 * 32 * 4], // Assuming RGBA
+                            // };
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Failed to open file: {}", e);
+                    self.error_message = Some(format!("Failed to open file: {}", e));
+                }
+            }
+        }
     }
 }
 
@@ -215,8 +279,7 @@ impl eframe::App for Motex {
             }
         });
 
-        if self.show_about_open {
-            self.about_window(ctx);
-        }
+        // About window
+        self.show_about_window(ctx);
     }
 }

@@ -3,7 +3,7 @@ name = "motex"
 version = "0.1.0"
 authors = ["Parker Burnett <jpburnett@byu.net>"]
 edition = "2021"
-rust-version = "1.79"
+rust-version = "1.80"
 publish = false
 readme = "README.md"
 
@@ -21,3 +21,4 @@ rfd = "0.14.1"
 pigment64 = "0.4.5"
 strum = "0.26.3"
 strum_macros = "0.26.4"
+open = "5.3"
