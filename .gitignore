@@ -14,3 +14,5 @@ motex.json
 
 # Weird macOS files
 .DS_Store
+
+config.toml

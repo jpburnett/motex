@@ -6,12 +6,24 @@ use std::{
 
 use anyhow::{Context, Result};
 
+/// A simple struct to hold the path and data of a binary file.
 #[derive(Debug, Default)]
 pub struct BinFile {
+    /// The file path as a `PathBuf`.
     pub path: PathBuf,
+    /// The raw bytes of the file.
     pub data: Vec<u8>,
 }
 
+/// Opens a file specified by the given path.
+///
+/// ### Arguments
+///
+/// * `path` - The path to the file to be opened.
+///
+/// ### Errors
+///
+/// Returns an error if the file fails to open.
 pub fn read_file_bytes<P: AsRef<Path>>(path: P) -> Result<Vec<u8>> {
     let file = File::open(path.as_ref())
         .with_context(|| format!("Failed to open file: {}", path.as_ref().display()))?;

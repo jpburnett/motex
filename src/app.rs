@@ -1,4 +1,3 @@
-/// App.rs
 use anyhow::Result;
 use eframe::egui::{
     self, CentralPanel, Color32, Sense, SidePanel, TextureHandle, TopBottomPanel, Vec2,
@@ -12,7 +11,7 @@ use crate::files::bin_handler::BinFile;
 use pigment64::{ImageType, NativeImage};
 use strum::IntoEnumIterator;
 
-/// The main application struct.
+/// The Motex Application.
 pub struct Motex {
     /// The selected codec.
     selected: ImageType,
@@ -64,6 +63,10 @@ impl Motex {
         Ok(())
     }
 
+    /// Renders the buttons for selecting the image format.
+    ///
+    /// ### Arguments
+    /// * `ui` - The egui context.
     fn render_image_format_buttons(&mut self, ui: &mut egui::Ui) {
         ui.heading("Image Formats");
 
@@ -97,6 +100,7 @@ impl Motex {
             });
     }
 
+    // TODO: finish implementing this function...
     fn render_color_info(&self, ui: &mut egui::Ui) {
         ui.heading("Color Info");
 
@@ -130,6 +134,30 @@ impl Motex {
         println!("Option Selected: {:?}", img_type);
     }
 
+    /// Renders the central "main" panel of the application.
+    /// This panel will display the image that is currently open in a variety of dimensions.
+    /// ### Arguments
+    /// * `ctx` - The egui context.
+    fn render_central_panel(&mut self, ctx: &egui::Context) {
+        CentralPanel::default().show(ctx, |ui| {
+            // Display the texture for a 32 x 32 image
+            let mut decoded_data: Vec<u8> = vec![];
+            let _ = self.image.decode(&mut decoded_data, None);
+            self.texture.set(
+                egui::ColorImage::from_rgba_unmultiplied(
+                    [self.image.width as usize, self.image.height as usize],
+                    &decoded_data,
+                ),
+                Default::default(),
+            );
+            ui.image(&self.texture);
+        });
+    }
+
+    /// Renders the left panel of the application.
+    /// This panel will contain the image format buttons and color information.
+    /// ### Arguments
+    /// * `ctx` - The egui context.
     fn render_left_panel(&mut self, ctx: &egui::Context) {
         SidePanel::left("left_panel")
             .resizable(false)
@@ -146,6 +174,11 @@ impl Motex {
         self.render_color_info(ui);
     }
 
+    /// Renders the right panel of the application.
+    /// This panel will contain the preview of the file data as well as
+    /// displaying the file size in hexadecimal.
+    /// ### Arguments
+    /// * `ctx` - The egui context.
     fn render_right_panel(&self, ctx: &egui::Context) {
         SidePanel::right("right_panel")
             .resizable(false)
@@ -166,7 +199,6 @@ impl Motex {
     /// Opens the About window and renders the contents of the window
     ///
     ///  ### Args
-    /// * `self` - Motex struct
     /// * `ctx` - egui context
     fn show_about_window(&mut self, ctx: &egui::Context) {
         egui::Window::new("About")
@@ -192,7 +224,6 @@ impl Motex {
 
     /// Creates and displays the top bar menu of the application.
     ///  ### Args
-    /// * `self` - Motex struct
     /// * `ctx` - egui context
     fn create_top_bar(&mut self, ctx: &egui::Context) {
         TopBottomPanel::top("top_bar").show(ctx, |ui| {
@@ -243,43 +274,34 @@ impl Motex {
             }
         }
     }
+
+    /// This function is responsible for rendering the bottom bar of the application.
+    /// The bar displays the current path of the file that is open.
+    ///
+    /// ### Args
+    /// * `ctx` - egui context
+    fn render_bottom_bar(&self, ctx: &egui::Context) {
+        TopBottomPanel::bottom("bottom_bar").show(ctx, |ui| {
+            // If a file is open, display the path.
+            if self.file_path.exists() {
+                ui.label(format!("File path: {:?}", self.file_path));
+            }
+        });
+    }
 }
 
 impl eframe::App for Motex {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Menu Bar
         self.create_top_bar(ctx);
 
         self.render_left_panel(ctx);
 
         self.render_right_panel(ctx);
 
-        // Main panel
-        CentralPanel::default().show(ctx, |ui| {
-            // Display the texture for a 32 x 32 image
-            let mut decoded_data: Vec<u8> = vec![];
-            let _ = self.image.decode(&mut decoded_data, None);
-            self.texture.set(
-                egui::ColorImage::from_rgba_unmultiplied(
-                    [self.image.width as usize, self.image.height as usize],
-                    &decoded_data,
-                ),
-                Default::default(),
-            );
-            ui.image(&self.texture);
-        });
+        self.render_central_panel(ctx);
 
-        // Bottom panel
-        TopBottomPanel::bottom("bottom_bar").show(ctx, |ui| {
-            ui.label("Bottom bar");
+        self.render_bottom_bar(ctx);
 
-            // If a file is open, display the path.
-            if self.file_path.exists() {
-                ui.label(format!("File path: {:?}", self.file_path));
-            }
-        });
-
-        // About window
         self.show_about_window(ctx);
     }
 }
