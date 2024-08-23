@@ -21,7 +21,8 @@ $ cargo run --release
 ```
 
 ## License
-...Need to figure this part out...
+
+* MIT license ([LICENSE](LICENSE) or http://opensource.org/licenses/MIT)
 
 ### Contribution
 
