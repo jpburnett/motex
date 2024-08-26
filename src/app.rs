@@ -1,7 +1,7 @@
 use anyhow::Result;
 use eframe::egui::{
-    self, CentralPanel, Color32, Sense, SidePanel, TextureHandle, TopBottomPanel, Vec2,
-    ViewportCommand,
+    self, CentralPanel, Color32, ColorImage, Sense, SidePanel, TextureHandle, TextureOptions,
+    TopBottomPanel, Vec2, ViewportCommand,
 };
 use std::path::{Path, PathBuf};
 
@@ -26,6 +26,9 @@ pub struct Motex {
     /// Flag indicating if the About window is open, true if open, false if closed.
     show_about_open: bool,
     error_message: Option<String>,
+
+    // Preview panel
+    preview_tex: TextureHandle,
 }
 
 impl Motex {
@@ -35,7 +38,7 @@ impl Motex {
             format: ImageType::I1,
             texture: cc.egui_ctx.load_texture(
                 "Test Tex",
-                egui::ColorImage::new([64, 64], egui::Color32::WHITE),
+                egui::ColorImage::new([1, 1], egui::Color32::WHITE),
                 Default::default(),
             ),
             file_data: vec![],
@@ -48,6 +51,11 @@ impl Motex {
             hover_color: None,
             show_about_open: false,
             error_message: None,
+            preview_tex: cc.egui_ctx.load_texture(
+                "preview_tex",
+                egui::ColorImage::new([1, 1], egui::Color32::WHITE),
+                TextureOptions::LINEAR,
+            ),
         }
     }
 
@@ -178,21 +186,70 @@ impl Motex {
     /// displaying the file size in hexadecimal.
     /// ### Arguments
     /// * `ctx` - The egui context.
-    fn render_right_panel(&self, ctx: &egui::Context) {
+    fn render_right_panel(&mut self, ctx: &egui::Context) {
         SidePanel::right("right_panel")
             .resizable(false)
             .default_width(200.0)
             .show(ctx, |ui| {
                 ui.vertical_centered(|ui| {
-                    ui.heading("Right Panel");
+                    ui.heading("Preview");
                     self.render_right_panel_content(ui);
                 });
             });
     }
 
-    fn render_right_panel_content(&self, ui: &mut egui::Ui) {
+    fn get_pixels(&self, data: &[u8]) -> Vec<Color32> {
+        data.chunks_exact(4)
+            .map(|p| {
+                let r = p[0] as u32;
+                let g = p[1] as u32;
+                let b = p[2] as u32;
+                let a = p[3] as u32;
+
+                Color32::from_rgba_premultiplied(
+                    ((r * a + 128) / 256) as u8,
+                    ((g * a + 128) / 256) as u8,
+                    ((b * a + 128) / 256) as u8,
+                    a as u8,
+                )
+            })
+            .collect()
+    }
+
+    fn render_right_panel_content(&mut self, ui: &mut egui::Ui) {
+        if self.file_data.is_empty() {
+            ui.label("No image data to display");
+            return;
+        }
+
         ui.label(format!("File data size: {:#X}", self.file_data.len()));
-        // TODO: Add a function to decode data here...
+        let mut decoded_data: Vec<u8> = vec![];
+
+        let img_width = 128;
+        let img_height =
+            (ui.available_height() as usize - 10).min(self.file_data.len() / (img_width * 4));
+
+        let ni: NativeImage = NativeImage::read(
+            &self.file_data[..],
+            self.format,
+            img_width as u32,
+            img_height as u32,
+        )
+        .unwrap();
+
+        let _ = ni.decode(&mut decoded_data, None);
+        let siz: usize = img_width * img_height * 4;
+
+        let imgdata = &decoded_data[0..siz.min(decoded_data.len())];
+
+        let img: ColorImage = ColorImage {
+            pixels: self.get_pixels(imgdata),
+            size: [img_width, img_height],
+        };
+
+        self.preview_tex.set(img, TextureOptions::LINEAR);
+
+        ui.image(&self.preview_tex);
     }
 
     /// Opens the About window and renders the contents of the window
