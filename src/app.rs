@@ -3,7 +3,6 @@ use eframe::egui::{
     self, CentralPanel, Color32, Sense, SidePanel, TextureHandle, TopBottomPanel, Vec2,
     ViewportCommand,
 };
-use open;
 use std::path::{Path, PathBuf};
 
 use crate::files::bin_handler::BinFile;
@@ -14,7 +13,7 @@ use strum::IntoEnumIterator;
 /// The Motex Application.
 pub struct Motex {
     /// The selected codec.
-    selected: ImageType,
+    format: ImageType,
     /// The texture to display.
     texture: TextureHandle,
     /// The file that is opened.
@@ -33,7 +32,7 @@ impl Motex {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         Self {
             file_path: PathBuf::default(),
-            selected: ImageType::I1,
+            format: ImageType::I1,
             texture: cc.egui_ctx.load_texture(
                 "Test Tex",
                 egui::ColorImage::new([64, 64], egui::Color32::WHITE),
@@ -81,7 +80,7 @@ impl Motex {
                     let button = ui.add_sized(
                         button_size,
                         egui::Button::new(format!("{:?}", img_type)).fill(
-                            if self.selected == img_type {
+                            if self.format == img_type {
                                 highlight_color
                             } else {
                                 egui::Color32::TRANSPARENT
@@ -129,7 +128,7 @@ impl Motex {
     }
 
     fn update_image_format(&mut self, img_type: ImageType) {
-        self.selected = img_type;
+        self.format = img_type;
         self.image.format = img_type;
         println!("Option Selected: {:?}", img_type);
     }
@@ -249,7 +248,7 @@ impl Motex {
         if let Some(path) = rfd::FileDialog::new().pick_file() {
             match self.open_file(&path) {
                 Ok(()) => {
-                    match NativeImage::read(&self.file_data[..], self.selected, 32, 32) {
+                    match NativeImage::read(&self.file_data[..], self.format, 32, 32) {
                         Ok(image) => {
                             self.image = image;
                             self.error_message = None; // Clear any previous error
