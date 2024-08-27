@@ -1,61 +1,46 @@
 use anyhow::Result;
 use eframe::egui::{
-    self, CentralPanel, Color32, ColorImage, Sense, SidePanel, TextureHandle, TextureOptions,
-    TopBottomPanel, Vec2, ViewportCommand,
+    self, CentralPanel, Color32, Sense, SidePanel, TopBottomPanel, Vec2, ViewportCommand,
 };
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use crate::files::bin_handler::BinFile;
+use crate::{files::bin_handler::BinFile, texview::TexView};
 // Used for texture
-use pigment64::{ImageType, NativeImage};
+use pigment64::ImageType;
 use strum::IntoEnumIterator;
 
 /// The Motex Application.
 pub struct Motex {
     /// The selected codec.
     format: ImageType,
-    /// The texture to display.
-    texture: TextureHandle,
     /// The file that is opened.
-    file_path: PathBuf,
-    /// The data from the currently open file.
-    file_data: Vec<u8>,
-    image: NativeImage,
+    file: BinFile,
+    /// The current position into the file.
+    file_pos: usize,
+    // Middle panel stuff
+    sample32_tex: TexView,
+
+    // Preview panel stuff
+    preview_tex: TexView,
+
     hover_color: Option<egui::Color32>,
 
     /// Flag indicating if the About window is open, true if open, false if closed.
     show_about_open: bool,
     error_message: Option<String>,
-
-    // Preview panel
-    preview_tex: TextureHandle,
 }
 
 impl Motex {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         Self {
-            file_path: PathBuf::default(),
-            format: ImageType::I1,
-            texture: cc.egui_ctx.load_texture(
-                "Test Tex",
-                egui::ColorImage::new([1, 1], egui::Color32::WHITE),
-                Default::default(),
-            ),
-            file_data: vec![],
-            image: NativeImage {
-                format: ImageType::I1,
-                width: 0,
-                height: 0,
-                data: vec![],
-            },
+            format: ImageType::I8,
+            file: BinFile::default(),
+            file_pos: 0,
+            sample32_tex: TexView::create(cc, "mid_view"),
             hover_color: None,
+            preview_tex: TexView::create(cc, "preview_tex"),
             show_about_open: false,
             error_message: None,
-            preview_tex: cc.egui_ctx.load_texture(
-                "preview_tex",
-                egui::ColorImage::new([1, 1], egui::Color32::WHITE),
-                TextureOptions::LINEAR,
-            ),
         }
     }
 
@@ -64,9 +49,7 @@ impl Motex {
     /// ### Arguments
     /// * `path` - The path to the file to open.
     pub fn open_file(&mut self, path: &Path) -> Result<()> {
-        let selected_file = BinFile::from_path(path)?;
-        self.file_data = selected_file.data;
-        self.file_path = selected_file.path;
+        self.file = BinFile::from_path(path)?;
         Ok(())
     }
 
@@ -135,10 +118,10 @@ impl Motex {
         }
     }
 
-    fn update_image_format(&mut self, img_type: ImageType) {
-        self.format = img_type;
-        self.image.format = img_type;
-        println!("Option Selected: {:?}", img_type);
+    fn update_image_format(&mut self, format: ImageType) {
+        self.format = format;
+        self.sample32_tex.format = format;
+        self.preview_tex.format = format;
     }
 
     /// Renders the central "main" panel of the application.
@@ -148,16 +131,11 @@ impl Motex {
     fn render_central_panel(&mut self, ctx: &egui::Context) {
         CentralPanel::default().show(ctx, |ui| {
             // Display the texture for a 32 x 32 image
-            let mut decoded_data: Vec<u8> = vec![];
-            let _ = self.image.decode(&mut decoded_data, None);
-            self.texture.set(
-                egui::ColorImage::from_rgba_unmultiplied(
-                    [self.image.width as usize, self.image.height as usize],
-                    &decoded_data,
-                ),
-                Default::default(),
-            );
-            ui.image(&self.texture);
+
+            self.sample32_tex.width = 32;
+            self.sample32_tex.height = 32;
+
+            self.sample32_tex.draw(&self.file.data, self.file_pos, ui);
         });
     }
 
@@ -183,73 +161,34 @@ impl Motex {
 
     /// Renders the right panel of the application.
     /// This panel will contain the preview of the file data as well as
-    /// displaying the file size in hexadecimal.
+    /// displaying the current file position in hexadecimal.
     /// ### Arguments
     /// * `ctx` - The egui context.
     fn render_right_panel(&mut self, ctx: &egui::Context) {
         SidePanel::right("right_panel")
+            .max_width(150.0)
             .resizable(false)
-            .default_width(200.0)
             .show(ctx, |ui| {
                 ui.vertical_centered(|ui| {
-                    ui.heading("Preview");
                     self.render_right_panel_content(ui);
                 });
             });
     }
 
-    fn get_pixels(&self, data: &[u8]) -> Vec<Color32> {
-        data.chunks_exact(4)
-            .map(|p| {
-                let r = p[0] as u32;
-                let g = p[1] as u32;
-                let b = p[2] as u32;
-                let a = p[3] as u32;
-
-                Color32::from_rgba_premultiplied(
-                    ((r * a + 128) / 256) as u8,
-                    ((g * a + 128) / 256) as u8,
-                    ((b * a + 128) / 256) as u8,
-                    a as u8,
-                )
-            })
-            .collect()
-    }
-
     fn render_right_panel_content(&mut self, ui: &mut egui::Ui) {
-        if self.file_data.is_empty() {
+        if self.file.data.is_empty() {
             ui.label("No image data to display");
             return;
         }
 
-        ui.label(format!("File data size: {:#X}", self.file_data.len()));
-        let mut decoded_data: Vec<u8> = vec![];
+        ui.horizontal(|ui| {
+            ui.label(format!("Pos: 0x{:X}", self.file_pos));
+        });
 
-        let img_width = 128;
-        let img_height =
-            (ui.available_height() as usize - 10).min(self.file_data.len() / (img_width * 4));
+        self.preview_tex.width = 128;
+        self.preview_tex.height = ui.available_height() as usize - 5;
 
-        let ni: NativeImage = NativeImage::read(
-            &self.file_data[..],
-            self.format,
-            img_width as u32,
-            img_height as u32,
-        )
-        .unwrap();
-
-        let _ = ni.decode(&mut decoded_data, None);
-        let siz: usize = img_width * img_height * 4;
-
-        let imgdata = &decoded_data[0..siz.min(decoded_data.len())];
-
-        let img: ColorImage = ColorImage {
-            pixels: self.get_pixels(imgdata),
-            size: [img_width, img_height],
-        };
-
-        self.preview_tex.set(img, TextureOptions::LINEAR);
-
-        ui.image(&self.preview_tex);
+        self.preview_tex.draw(&self.file.data, self.file_pos, ui);
     }
 
     /// Opens the About window and renders the contents of the window
@@ -304,25 +243,7 @@ impl Motex {
     fn open_file_dialog(&mut self) {
         if let Some(path) = rfd::FileDialog::new().pick_file() {
             match self.open_file(&path) {
-                Ok(()) => {
-                    match NativeImage::read(&self.file_data[..], self.format, 32, 32) {
-                        Ok(image) => {
-                            self.image = image;
-                            self.error_message = None; // Clear any previous error
-                        }
-                        Err(e) => {
-                            eprintln!("Failed to read image: {}", e);
-                            self.error_message = Some(format!("Failed to read image: {}", e));
-                            // Optionally, there could be a blank image here?
-                            // self.image = NativeImage {
-                            //     format: ImageType::default(), // Assuming ImageType has a default
-                            //     width: 32,
-                            //     height: 32,
-                            //     data: vec![0; 32 * 32 * 4], // Assuming RGBA
-                            // };
-                        }
-                    }
-                }
+                Ok(()) => {}
                 Err(e) => {
                     eprintln!("Failed to open file: {}", e);
                     self.error_message = Some(format!("Failed to open file: {}", e));
@@ -332,15 +253,19 @@ impl Motex {
     }
 
     /// This function is responsible for rendering the bottom bar of the application.
-    /// The bar displays the current path of the file that is open.
+    /// The bar displays the path and size of the file that is open.
     ///
     /// ### Args
     /// * `ctx` - egui context
     fn render_bottom_bar(&self, ctx: &egui::Context) {
         TopBottomPanel::bottom("bottom_bar").show(ctx, |ui| {
             // If a file is open, display the path.
-            if self.file_path.exists() {
-                ui.label(format!("File path: {:?}", self.file_path));
+            if self.file.path.exists() {
+                ui.label(format!(
+                    "File path: {:?} - Size: 0x{:X}",
+                    self.file.path,
+                    self.file.data.len()
+                ));
             }
         });
     }
@@ -348,6 +273,37 @@ impl Motex {
 
 impl eframe::App for Motex {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        ctx.input(|i| {
+            if self.file.data.is_empty() {
+                return;
+            }
+
+            // TODO we may want to just use the smooth scroll delta and normalize it somehow, rather than the shenanigans below
+            let scroll_dir = match i.raw_scroll_delta.y.partial_cmp(&0.0) {
+                Some(std::cmp::Ordering::Greater) => -1,
+                Some(std::cmp::Ordering::Less) => 1,
+                _ => 0,
+            };
+
+            // Scroll 4 lines at a time
+            let scroll_factor = 4;
+
+            self.file_pos = (self.file_pos as i32
+                + (scroll_dir
+                    * scroll_factor
+                    * (self.preview_tex.width as f32 * bpp_from_image_type(self.preview_tex.format)) // TODO maybe we don't want to change the scroll speed based on the currently-selected format
+                        as i32))
+                .max(0)
+                .min(self.file.data.len() as i32) as usize;
+        });
+
+        // Open dropped files
+        if ctx.input(|i| !i.raw.dropped_files.is_empty()) {
+            for file in ctx.input(|i| i.raw.dropped_files.clone()) {
+                let _ = self.open_file(&file.path.unwrap());
+            }
+        }
+
         self.create_top_bar(ctx);
 
         self.render_left_panel(ctx);
@@ -359,5 +315,20 @@ impl eframe::App for Motex {
         self.render_bottom_bar(ctx);
 
         self.show_about_window(ctx);
+    }
+}
+
+fn bpp_from_image_type(image_type: ImageType) -> f32 {
+    match image_type {
+        ImageType::I1 => 0.125,
+        ImageType::I4 => 0.5,
+        ImageType::I8 => 1.0,
+        ImageType::Ia4 => 0.5,
+        ImageType::Ia8 => 1.0,
+        ImageType::Ia16 => 2.0,
+        ImageType::Ci4 => 0.5,
+        ImageType::Ci8 => 1.0,
+        ImageType::Rgba16 => 2.0,
+        ImageType::Rgba32 => 4.0,
     }
 }

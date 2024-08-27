@@ -2,6 +2,7 @@
 
 mod app;
 mod files;
+mod texview;
 
 use app::Motex;
 
