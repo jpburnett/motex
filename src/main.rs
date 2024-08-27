@@ -2,6 +2,7 @@
 
 mod app;
 mod files;
+mod motex_options;
 
 use app::Motex;
 

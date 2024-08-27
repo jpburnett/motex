@@ -5,13 +5,24 @@ use eframe::egui::{
 };
 use std::path::{Path, PathBuf};
 
-use crate::files::bin_handler::BinFile;
 // Used for texture
 use pigment64::{ImageType, NativeImage};
 use strum::IntoEnumIterator;
 
+use crate::{
+    files::bin_handler::BinFile,
+    motex_options::{options_window, Appearance},
+};
+
+#[derive(Default)]
+pub struct ViewState {
+    show_about: bool,
+    show_options: bool,
+}
+
 /// The Motex Application.
 pub struct Motex {
+    appearance: Appearance,
     /// The selected codec.
     format: ImageType,
     /// The texture to display.
@@ -20,11 +31,13 @@ pub struct Motex {
     file_path: PathBuf,
     /// The data from the currently open file.
     file_data: Vec<u8>,
+    /// The image that is currently open.
     image: NativeImage,
+    /// The color that is currently being hovered over.
     hover_color: Option<egui::Color32>,
-
-    /// Flag indicating if the About window is open, true if open, false if closed.
-    show_about_open: bool,
+    /// View state for the application.
+    view_state: ViewState,
+    /// Error message to display.
     error_message: Option<String>,
 
     // Preview panel
@@ -34,6 +47,7 @@ pub struct Motex {
 impl Motex {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         Self {
+            appearance: Appearance::default(),
             file_path: PathBuf::default(),
             format: ImageType::I1,
             texture: cc.egui_ctx.load_texture(
@@ -49,7 +63,7 @@ impl Motex {
                 data: vec![],
             },
             hover_color: None,
-            show_about_open: false,
+            view_state: ViewState::default(),
             error_message: None,
             preview_tex: cc.egui_ctx.load_texture(
                 "preview_tex",
@@ -68,6 +82,10 @@ impl Motex {
         self.file_data = selected_file.data;
         self.file_path = selected_file.path;
         Ok(())
+    }
+
+    fn pre_update(&mut self, ctx: &egui::Context) {
+        self.appearance.pre_update(ctx);
     }
 
     /// Renders the buttons for selecting the image format.
@@ -258,7 +276,7 @@ impl Motex {
     /// * `ctx` - egui context
     fn show_about_window(&mut self, ctx: &egui::Context) {
         egui::Window::new("About")
-            .open(&mut self.show_about_open)
+            .open(&mut self.view_state.show_about)
             .default_open(true)
             .show(ctx, |ui| {
                 ui.vertical_centered(|ui| {
@@ -294,8 +312,12 @@ impl Motex {
                     }
                 });
 
+                if ui.add(egui::Button::new("Options")).clicked() {
+                    self.view_state.show_options = true;
+                }
+
                 if ui.add(egui::Button::new("About")).clicked() {
-                    self.show_about_open = true;
+                    self.view_state.show_about = true;
                 }
             });
         });
@@ -348,6 +370,8 @@ impl Motex {
 
 impl eframe::App for Motex {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.pre_update(ctx);
+
         self.create_top_bar(ctx);
 
         self.render_left_panel(ctx);
@@ -358,6 +382,14 @@ impl eframe::App for Motex {
 
         self.render_bottom_bar(ctx);
 
-        self.show_about_window(ctx);
+        let show_about = &mut self.view_state.show_about;
+        if *show_about {
+            self.show_about_window(ctx);
+        }
+
+        let show_options = &mut self.view_state.show_options;
+        if *show_options {
+            options_window(ctx, show_options, &mut self.appearance);
+        }
     }
 }
