@@ -4,13 +4,25 @@ use eframe::egui::{
 };
 use std::path::Path;
 
-use crate::{files::bin_handler::BinFile, texview::TexView};
 // Used for texture
 use pigment64::ImageType;
 use strum::IntoEnumIterator;
 
+use crate::{
+    files::bin_handler::BinFile,
+    motex_options::{options_window, Appearance},
+    texview::TexView,
+};
+
+#[derive(Default)]
+pub struct ViewState {
+    show_about: bool,
+    show_options: bool,
+}
+
 /// The Motex Application.
 pub struct Motex {
+    appearance: Appearance,
     /// The selected codec.
     format: ImageType,
     /// The file that is opened.
@@ -22,11 +34,11 @@ pub struct Motex {
 
     // Preview panel stuff
     preview_tex: TexView,
-
+    /// The color that is currently being hovered over.
     hover_color: Option<egui::Color32>,
-
-    /// Flag indicating if the About window is open, true if open, false if closed.
-    show_about_open: bool,
+    /// View state for the application.
+    view_state: ViewState,
+    /// Error message to display.
     error_message: Option<String>,
 }
 
@@ -39,7 +51,8 @@ impl Motex {
             sample32_tex: TexView::create(cc, "mid_view"),
             hover_color: None,
             preview_tex: TexView::create(cc, "preview_tex"),
-            show_about_open: false,
+            appearance: Appearance::default(),
+            view_state: ViewState::default(),
             error_message: None,
         }
     }
@@ -51,6 +64,10 @@ impl Motex {
     pub fn open_file(&mut self, path: &Path) -> Result<()> {
         self.file = BinFile::from_path(path)?;
         Ok(())
+    }
+
+    fn pre_update(&mut self, ctx: &egui::Context) {
+        self.appearance.pre_update(ctx);
     }
 
     /// Renders the buttons for selecting the image format.
@@ -199,7 +216,7 @@ impl Motex {
     /// * `ctx` - egui context
     fn show_about_window(&mut self, ctx: &egui::Context) {
         egui::Window::new("About")
-            .open(&mut self.show_about_open)
+            .open(&mut self.view_state.show_about)
             .default_open(true)
             .show(ctx, |ui| {
                 ui.vertical_centered(|ui| {
@@ -235,8 +252,12 @@ impl Motex {
                     }
                 });
 
+                if ui.add(egui::Button::new("Options")).clicked() {
+                    self.view_state.show_options = true;
+                }
+
                 if ui.add(egui::Button::new("About")).clicked() {
-                    self.show_about_open = true;
+                    self.view_state.show_about = true;
                 }
             });
         });
@@ -305,6 +326,7 @@ impl eframe::App for Motex {
                 let _ = self.open_file(&file.path.unwrap());
             }
         }
+        self.pre_update(ctx);
 
         self.create_top_bar(ctx);
 
@@ -316,7 +338,15 @@ impl eframe::App for Motex {
 
         self.render_bottom_bar(ctx);
 
-        self.show_about_window(ctx);
+        let show_about = &mut self.view_state.show_about;
+        if *show_about {
+            self.show_about_window(ctx);
+        }
+
+        let show_options = &mut self.view_state.show_options;
+        if *show_options {
+            options_window(ctx, show_options, &mut self.appearance);
+        }
     }
 }
 
