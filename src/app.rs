@@ -135,7 +135,8 @@ impl Motex {
             self.sample32_tex.width = 32;
             self.sample32_tex.height = 32;
 
-            self.sample32_tex.draw(&self.file.data, self.file_pos, ui);
+            self.sample32_tex
+                .draw(&self.file.data, self.file_pos, ui, ctx);
         });
     }
 
@@ -170,12 +171,12 @@ impl Motex {
             .resizable(false)
             .show(ctx, |ui| {
                 ui.vertical_centered(|ui| {
-                    self.render_right_panel_content(ui);
+                    self.render_right_panel_content(ui, ctx);
                 });
             });
     }
 
-    fn render_right_panel_content(&mut self, ui: &mut egui::Ui) {
+    fn render_right_panel_content(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         if self.file.data.is_empty() {
             ui.label("No image data to display");
             return;
@@ -188,7 +189,8 @@ impl Motex {
         self.preview_tex.width = 128;
         self.preview_tex.height = ui.available_height() as usize - 5;
 
-        self.preview_tex.draw(&self.file.data, self.file_pos, ui);
+        self.preview_tex
+            .draw(&self.file.data, self.file_pos, ui, ctx);
     }
 
     /// Opens the About window and renders the contents of the window

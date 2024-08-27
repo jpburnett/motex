@@ -32,7 +32,7 @@ impl TexView {
         }
     }
     /// Draw the texture with the given data.
-    pub fn draw(&mut self, data: &[u8], offset: usize, ui: &mut egui::Ui) {
+    pub fn draw(&mut self, data: &[u8], offset: usize, ui: &mut egui::Ui, ctx: &egui::Context) {
         if offset > data.len() {
             return;
         }
@@ -68,7 +68,19 @@ impl TexView {
         self.tex.set(img, TextureOptions::LINEAR);
 
         // Put the texture directly over the background
-        ui.put(bg_loc.rect, Image::new(&self.tex));
+        let res = ui.put(bg_loc.rect, Image::new(&self.tex));
+
+        let tex_rect = res.rect;
+
+        if let Some(cursor_pos) = ctx.input(|i| i.pointer.hover_pos()) {
+            if tex_rect.contains(cursor_pos) {
+                let relative_pos = cursor_pos - tex_rect.min;
+                let pixel = relative_pos.y * self.width as f32 + relative_pos.x;
+                // get index into data from pixel
+                let index = (pixel as usize) * 4;
+                // somethin else TODO
+            }
+        }
     }
 }
 
