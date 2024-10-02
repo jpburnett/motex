@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 
 /// A simple struct to hold the path and data of a binary file.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq)]
 pub struct BinFile {
     /// The file path as a `PathBuf`.
     pub path: PathBuf,

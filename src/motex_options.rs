@@ -1,37 +1,42 @@
-use eframe::egui::{self};
+use eframe::egui::{self, Theme};
 
 pub struct Appearance {
-    pub theme: eframe::Theme,
+    pub theme_pref: Theme,
 }
 
 impl Default for Appearance {
     fn default() -> Self {
         Self {
-            theme: eframe::Theme::Dark,
+            theme_pref: Theme::Dark,
         }
     }
 }
 
 impl Appearance {
     pub fn pre_update(&mut self, ctx: &egui::Context) {
-        if ctx.style().visuals.dark_mode != (self.theme == eframe::Theme::Dark) {
-            let mut style = ctx.style().as_ref().clone();
-            style.visuals = match self.theme {
-                eframe::Theme::Dark => egui::Visuals::dark(),
-                eframe::Theme::Light => egui::Visuals::light(),
-            };
-            ctx.set_style(style);
+        self.set_theme(ctx);
+    }
+
+    fn set_theme(&self, ctx: &egui::Context) {
+        // Use egui::Theme directly for simplicity
+        match self.theme_pref {
+            egui::Theme::Dark => ctx.set_visuals(egui::Visuals::dark()),
+            egui::Theme::Light => ctx.set_visuals(egui::Visuals::light()),
         }
     }
 }
 
 pub fn options_window(ctx: &egui::Context, show: &mut bool, options: &mut Appearance) {
     egui::Window::new("Options").open(show).show(ctx, |ui| {
-        egui::ComboBox::from_label("Theme")
-            .selected_text(format!("{:?}", options.theme))
+        ui.label("Theme"); // Place the label above the ComboBox
+        egui::ComboBox::from_id_salt("theme_selection")
+            .selected_text(match options.theme_pref {
+                Theme::Dark => "Dark".to_string(),
+                Theme::Light => "Light".to_string(),
+            })
             .show_ui(ui, |ui| {
-                ui.selectable_value(&mut options.theme, eframe::Theme::Dark, "Dark");
-                ui.selectable_value(&mut options.theme, eframe::Theme::Light, "Light");
+                ui.selectable_value(&mut options.theme_pref, Theme::Dark, "Dark");
+                ui.selectable_value(&mut options.theme_pref, Theme::Light, "Light");
             });
     });
 }

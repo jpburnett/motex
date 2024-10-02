@@ -1,16 +1,18 @@
 // tests/bin_handler_tests.rs
 
 #[cfg(test)]
+#[path = "../src/bin_handler.rs"]
+mod bin_handler;
 
 mod tests {
-    use motex::{read_file_bytes, BinFile};
-    use std::path::Path;
+    use super::bin_handler::BinFile;
+    use std::path::Path; // Import BinFile inside the mod tests
 
     #[test]
     fn test_read_file_bytes() {
         let path = Path::new("tests/test_files/hello.txt");
         let expected = b"Hello there!";
-        let result = read_file_bytes(path).unwrap();
+        let result = BinFile::from_path(path).unwrap();
         assert_eq!(result, expected);
     }
 

@@ -9,7 +9,7 @@ use pigment64::ImageType;
 use strum::IntoEnumIterator;
 
 use crate::{
-    files::bin_handler::BinFile,
+    bin_handler::BinFile,
     motex_options::{options_window, Appearance},
     texview::TexView,
 };
@@ -31,7 +31,6 @@ pub struct Motex {
     file_pos: usize,
     // Middle panel stuff
     sample32_tex: TexView,
-
     // Preview panel stuff
     preview_tex: TexView,
     /// The color that is currently being hovered over.
