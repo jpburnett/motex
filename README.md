@@ -1,5 +1,5 @@
 # Motex
-An N64 texture viewer. Inspired by Inspired by [Texture64](https://github.com/queueRAM/Texture64).
+An N64 texture viewer. Inspired by [Texture64](https://github.com/queueRAM/Texture64).
 
 As the saying goes: mo' textures mo' problems.
 

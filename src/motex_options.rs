@@ -1,4 +1,4 @@
-use eframe::egui::{self, Theme};
+use eframe::egui::{self, Theme, Visuals};
 
 pub struct Appearance {
     pub theme_pref: Theme,
@@ -20,8 +20,8 @@ impl Appearance {
     fn set_theme(&self, ctx: &egui::Context) {
         // Use egui::Theme directly for simplicity
         match self.theme_pref {
-            egui::Theme::Dark => ctx.set_visuals(egui::Visuals::dark()),
-            egui::Theme::Light => ctx.set_visuals(egui::Visuals::light()),
+            Theme::Dark => ctx.set_visuals(Visuals::dark()),
+            Theme::Light => ctx.set_visuals(Visuals::light()),
         }
     }
 }
