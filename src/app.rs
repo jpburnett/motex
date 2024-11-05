@@ -1,6 +1,7 @@
 use anyhow::Result;
 use eframe::egui::{
-    self, CentralPanel, Color32, Sense, SidePanel, TopBottomPanel, Vec2, ViewportCommand,
+    self, CentralPanel, CollapsingHeader, Color32, ScrollArea, Sense, SidePanel, TopBottomPanel,
+    Vec2, ViewportCommand,
 };
 use std::path::Path;
 
@@ -146,14 +147,43 @@ impl Motex {
     /// * `ctx` - The egui context.
     fn render_central_panel(&mut self, ctx: &egui::Context) {
         CentralPanel::default().show(ctx, |ui| {
-            // Display the texture for a 32 x 32 image
+            self.render_central_panel_content(ui, ctx);
+        });
+    }
 
-            self.sample32_tex.width = 32;
-            self.sample32_tex.height = 32;
+    const DEFAULT_SAMPLE_SIZE: usize = 32;
 
+    fn render_central_panel_content(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        // Add zoom controls
+        ui.horizontal(|ui| {
+            ui.label("Zoom:");
+            if ui.button("-").clicked() && self.sample32_tex.width > 8 {
+                self.sample32_tex.width /= 2;
+                self.sample32_tex.height /= 2;
+            }
+            ui.label(format!(
+                "{}x{}",
+                self.sample32_tex.width, self.sample32_tex.height
+            ));
+            if ui.button("+").clicked() && self.sample32_tex.width < 256 {
+                self.sample32_tex.width *= 2;
+                self.sample32_tex.height *= 2;
+            }
+            if ui.button("Reset").clicked() {
+                self.sample32_tex.width = Self::DEFAULT_SAMPLE_SIZE;
+                self.sample32_tex.height = Self::DEFAULT_SAMPLE_SIZE;
+            }
+        });
+
+        // Draw the texture
+        if self.file.data.is_empty() {
+            ui.centered_and_justified(|ui| {
+                ui.label("No image loaded. Please open a file.");
+            });
+        } else {
             self.sample32_tex
                 .draw(&self.file.data, self.file_pos, ui, ctx);
-        });
+        }
     }
 
     /// Renders the left panel of the application.
@@ -165,15 +195,26 @@ impl Motex {
             .resizable(false)
             .default_width(200.0)
             .show(ctx, |ui| {
-                ui.vertical_centered(|ui| {
+                ScrollArea::vertical().show(ui, |ui| {
                     self.render_left_panel_content(ui);
                 });
             });
     }
 
     fn render_left_panel_content(&mut self, ui: &mut egui::Ui) {
-        self.render_image_format_buttons(ui);
-        self.render_color_info(ui);
+        CollapsingHeader::new("Image Format")
+            .default_open(true)
+            .show(ui, |ui| {
+                self.render_image_format_buttons(ui);
+            });
+
+        ui.add_space(8.0);
+
+        CollapsingHeader::new("Color Information")
+            .default_open(true)
+            .show(ui, |ui| {
+                self.render_color_info(ui);
+            });
     }
 
     /// Renders the right panel of the application.
@@ -186,7 +227,7 @@ impl Motex {
             .max_width(150.0)
             .resizable(false)
             .show(ctx, |ui| {
-                ui.vertical_centered(|ui| {
+                ScrollArea::vertical().show(ui, |ui| {
                     self.render_right_panel_content(ui, ctx);
                 });
             });
@@ -194,17 +235,46 @@ impl Motex {
 
     fn render_right_panel_content(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         if self.file.data.is_empty() {
-            ui.label("No image data to display");
+            ui.label("No file loaded");
             return;
         }
 
+        // File information section
+        CollapsingHeader::new("File Info")
+            .default_open(true)
+            .show(ui, |ui| {
+                ui.label(format!("Size: {} bytes", self.file.data.len()));
+                ui.horizontal(|ui| {
+                    ui.label("Position:");
+                    ui.monospace(format!("0x{:08X}", self.file_pos));
+                });
+            });
+
+        // Navigation controls
+        ui.add_space(8.0);
         ui.horizontal(|ui| {
-            ui.label(format!("Pos: 0x{:X}", self.file_pos));
+            if ui.button("◄").clicked() {}
+            if ui.button("►").clicked() {}
         });
 
+        // Jump to position
+        ui.horizontal(|ui| {
+            ui.label("Jump to:");
+            let mut hex_pos = format!("{:X}", self.file_pos);
+            if ui.text_edit_singleline(&mut hex_pos).lost_focus() {
+                if let Ok(pos) = usize::from_str_radix(&hex_pos, 16) {
+                    if pos < self.file.data.len() {
+                        self.file_pos = pos;
+                    }
+                }
+            }
+        });
+
+        ui.add_space(8.0);
+
+        // Preview
         self.preview_tex.width = 128;
         self.preview_tex.height = ui.available_height() as usize - 5;
-
         self.preview_tex
             .draw(&self.file.data, self.file_pos, ui, ctx);
     }
