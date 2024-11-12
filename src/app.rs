@@ -44,13 +44,22 @@ pub struct Motex {
 
 impl Motex {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        let mut sample32_tex = TexView::new(cc, "mid_view");
+        let mut preview_tex = TexView::new(cc, "preview_tex");
+
+        // Initialize both texture views with sensible default dimensions
+        sample32_tex.width = 32;
+        sample32_tex.height = 32;
+        preview_tex.width = 64;
+        preview_tex.height = 64;
+
         Self {
             format: ImageType::I8,
             file: BinFile::default(),
             file_pos: 0,
-            sample32_tex: TexView::create(cc, "mid_view"),
-            hover_color: None,
-            preview_tex: TexView::create(cc, "preview_tex"),
+            sample32_tex,
+            hover_color: Some(egui::Color32::from_rgba_premultiplied(0, 0, 0, 0)),
+            preview_tex,
             appearance: Appearance::default(),
             view_state: ViewState::default(),
             error_message: None,
@@ -107,33 +116,40 @@ impl Motex {
             });
     }
 
-    // TODO: finish implementing this function...
     fn render_color_info(&self, ui: &mut egui::Ui) {
-        ui.heading("Color Info");
-
-        if let Some(color) = self.hover_color {
+        if let Some(color) = self.sample32_tex.hover_color {
             let (r, g, b, a) = color.to_tuple();
 
-            // Display hex representation
             ui.label(format!("Hex: #{:02X}{:02X}{:02X}{:02X}", r, g, b, a));
-
-            // Display individual R, G, B, A values
             ui.label(format!("R: {}", r));
             ui.label(format!("G: {}", g));
             ui.label(format!("B: {}", b));
             ui.label(format!("A: {}", a));
 
-            // Display color preview
-            let color_preview_size = Vec2::new(30.0, 30.0);
-            let (rect, _response) = ui.allocate_exact_size(color_preview_size, Sense::hover());
+            let color_preview_size = egui::Vec2::new(30.0, 30.0);
+            let (rect, _response) =
+                ui.allocate_exact_size(color_preview_size, egui::Sense::hover());
             ui.painter().rect_filled(rect, 0.0, color);
-
-            // Optional: Add a border around the color preview
-            ui.painter().rect_stroke(rect, 0.0, (1.0, Color32::BLACK));
+            ui.painter()
+                .rect_stroke(rect, 0.0, (1.0, egui::Color32::BLACK));
         } else {
             ui.label("Hover over the image to see color info");
         }
     }
+
+    // TOOD: Maybe I don't need this function?
+    // fn update_preview(&mut self) {
+    //     if !self.file.data.is_empty() {
+    //         // Update preview dimensions based on format
+    //         self.preview_tex
+    //             .update_dimensions(self.format, self.file.data.len() - self.file_pos);
+
+    //         // Update sample view dimensions
+    //         self.sample32_tex.format = self.format;
+    //         self.sample32_tex.width = 32;
+    //         self.sample32_tex.height = 32;
+    //     }
+    // }
 
     fn update_image_format(&mut self, format: ImageType) {
         self.format = format;
@@ -240,34 +256,11 @@ impl Motex {
         }
 
         // File information section
-        CollapsingHeader::new("File Info")
-            .default_open(true)
-            .show(ui, |ui| {
-                ui.label(format!("Size: {} bytes", self.file.data.len()));
-                ui.horizontal(|ui| {
-                    ui.label("Position:");
-                    ui.monospace(format!("0x{:08X}", self.file_pos));
-                });
-            });
-
-        // Navigation controls
-        ui.add_space(8.0);
+        ui.heading("File Info");
+        ui.label(format!("Size: {} bytes", self.file.data.len()));
         ui.horizontal(|ui| {
-            if ui.button("◄").clicked() {}
-            if ui.button("►").clicked() {}
-        });
-
-        // Jump to position
-        ui.horizontal(|ui| {
-            ui.label("Jump to:");
-            let mut hex_pos = format!("{:X}", self.file_pos);
-            if ui.text_edit_singleline(&mut hex_pos).lost_focus() {
-                if let Ok(pos) = usize::from_str_radix(&hex_pos, 16) {
-                    if pos < self.file.data.len() {
-                        self.file_pos = pos;
-                    }
-                }
-            }
+            ui.label("Position:");
+            ui.monospace(format!("0x{:08X}", self.file_pos));
         });
 
         ui.add_space(8.0);
@@ -353,11 +346,12 @@ impl Motex {
         TopBottomPanel::bottom("bottom_bar").show(ctx, |ui| {
             // If a file is open, display the path.
             if self.file.path.exists() {
-                ui.label(format!(
-                    "File path: {:?} - Size: 0x{:X}",
-                    self.file.path,
-                    self.file.data.len()
-                ));
+                ui.horizontal(|ui| {
+                    ui.label(format!("File: {:?}", self.file.path));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.label(format!("Size: 0x{:X}", self.file.data.len()));
+                    });
+                });
             }
         });
     }

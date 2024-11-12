@@ -10,11 +10,12 @@ pub struct TexView {
     pub bg_color: Color32,
     pub bg_tex: TextureHandle,
     pub tex: TextureHandle,
+    pub hover_color: Option<Color32>,
 }
 
 impl TexView {
-    pub fn create(cc: &eframe::CreationContext<'_>, tex_name: &str) -> TexView {
-        TexView {
+    pub fn new(cc: &eframe::CreationContext<'_>, tex_name: &str) -> Self {
+        Self {
             format: ImageType::I8,
             width: 0,
             height: 0,
@@ -29,9 +30,10 @@ impl TexView {
                 egui::ColorImage::new([1, 1], egui::Color32::WHITE),
                 Default::default(),
             ),
+            hover_color: Some(Color32::from_rgba_premultiplied(0, 0, 0, 0)),
         }
     }
-    /// Draw the texture with the given data.
+
     pub fn draw(&mut self, data: &[u8], offset: usize, ui: &mut egui::Ui, ctx: &egui::Context) {
         if offset > data.len() {
             return;
@@ -78,10 +80,46 @@ impl TexView {
                 let pixel = relative_pos.y * self.width as f32 + relative_pos.x;
                 // get index into data from pixel
                 let index = (pixel as usize) * 4;
-                // somethin else TODO
+
+                if index + 3 < data.len() {
+                    let r = data[index];
+                    let g = data[index + 1];
+                    let b = data[index + 2];
+                    let a = data[index + 3];
+                    self.hover_color = Some(Color32::from_rgba_premultiplied(r, g, b, a));
+                }
             }
         }
     }
+
+    pub fn update_dimensions(&mut self, format: ImageType, data_size: usize) {
+        // Calculate reasonable dimensions based on format and available data
+        let bpp = match format {
+            ImageType::I1 => 1,
+            ImageType::I4 | ImageType::Ia4 | ImageType::Ci4 => 4,
+            ImageType::I8 | ImageType::Ia8 | ImageType::Ci8 => 8,
+            ImageType::Ia16 | ImageType::Rgba16 => 16,
+            ImageType::Rgba32 => 32,
+        };
+
+        // Calculate maximum square dimensions that would fit in the data
+        let max_pixels = (data_size * 8) / bpp;
+        let max_square = (max_pixels as f64).sqrt().floor() as usize;
+
+        // Set dimensions to power of 2, max 64x64
+        self.width = max_square.min(64).next_power_of_two();
+        self.height = self.width;
+    }
+}
+
+// Helper function to convert raw image data to egui ColorImage
+fn data_to_color_image(width: usize, height: usize, data: &[u8]) -> ColorImage {
+    assert!(data.len() >= width * height * 4);
+    let pixels: Vec<Color32> = data
+        .chunks_exact(4)
+        .map(|chunk| Color32::from_rgba_unmultiplied(chunk[0], chunk[1], chunk[2], chunk[3]))
+        .collect();
+    ColorImage::from_rgba_unmultiplied([width, height], data)
 }
 
 // TODO this can probably be implemented better and avoid allocating a Vec or something
@@ -94,29 +132,5 @@ pub fn pad_to_length(data: Vec<u8>, length: usize) -> Vec<u8> {
             ret
         }
         false => data[..length].to_vec(),
-    }
-}
-
-/// Convert raw RGBA data to a `ColorImage`, adjusting the color values for color accuracy.
-pub fn data_to_color_image(width: usize, height: usize, data: &[u8]) -> ColorImage {
-    ColorImage {
-        pixels: {
-            data.chunks_exact(4)
-                .map(|p| {
-                    let r = p[0] as u32;
-                    let g = p[1] as u32;
-                    let b = p[2] as u32;
-                    let a = p[3] as u32;
-
-                    Color32::from_rgba_premultiplied(
-                        ((r * a + 128) / 256) as u8,
-                        ((g * a + 128) / 256) as u8,
-                        ((b * a + 128) / 256) as u8,
-                        a as u8,
-                    )
-                })
-                .collect()
-        },
-        size: [width, height],
     }
 }
