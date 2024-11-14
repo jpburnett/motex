@@ -76,7 +76,7 @@ impl Motex {
     }
 
     fn pre_update(&mut self, ctx: &egui::Context) {
-        self.appearance.pre_update(ctx);
+        self.appearance.apply_appearance(ctx);
     }
 
     /// Renders the buttons for selecting the image format.
