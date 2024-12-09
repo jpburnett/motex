@@ -1,7 +1,6 @@
 use anyhow::Result;
 use eframe::egui::{
-    self, CentralPanel, CollapsingHeader, Color32, ScrollArea, Sense, SidePanel, TopBottomPanel,
-    Vec2, ViewportCommand,
+    self, CentralPanel, CollapsingHeader, ScrollArea, SidePanel, TopBottomPanel, ViewportCommand,
 };
 use std::path::Path;
 
@@ -120,7 +119,7 @@ impl Motex {
         if let Some(color) = self.sample32_tex.hover_color {
             let (r, g, b, a) = color.to_tuple();
 
-            ui.label(format!("Hex: #{:02X}{:02X}{:02X}{:02X}", r, g, b, a));
+            ui.label(format!("Hex: {:02X}{:02X}{:02X}{:02X}", r, g, b, a));
             ui.label(format!("R: {}", r));
             ui.label(format!("G: {}", g));
             ui.label(format!("B: {}", b));
@@ -136,20 +135,6 @@ impl Motex {
             ui.label("Hover over the image to see color info");
         }
     }
-
-    // TOOD: Maybe I don't need this function?
-    // fn update_preview(&mut self) {
-    //     if !self.file.data.is_empty() {
-    //         // Update preview dimensions based on format
-    //         self.preview_tex
-    //             .update_dimensions(self.format, self.file.data.len() - self.file_pos);
-
-    //         // Update sample view dimensions
-    //         self.sample32_tex.format = self.format;
-    //         self.sample32_tex.width = 32;
-    //         self.sample32_tex.height = 32;
-    //     }
-    // }
 
     fn update_image_format(&mut self, format: ImageType) {
         self.format = format;
@@ -167,27 +152,19 @@ impl Motex {
         });
     }
 
-    const DEFAULT_SAMPLE_SIZE: usize = 32;
-
     fn render_central_panel_content(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         // Add zoom controls
         ui.horizontal(|ui| {
             ui.label("Zoom:");
-            if ui.button("-").clicked() && self.sample32_tex.width > 8 {
-                self.sample32_tex.width /= 2;
-                self.sample32_tex.height /= 2;
+            if ui.button("-").clicked() && self.sample32_tex.zoom > 0.5 {
+                self.sample32_tex.zoom /= 2.0;
             }
-            ui.label(format!(
-                "{}x{}",
-                self.sample32_tex.width, self.sample32_tex.height
-            ));
-            if ui.button("+").clicked() && self.sample32_tex.width < 256 {
-                self.sample32_tex.width *= 2;
-                self.sample32_tex.height *= 2;
+            ui.label(format!("{:.2}x", self.sample32_tex.zoom));
+            if ui.button("+").clicked() && self.sample32_tex.zoom < 8.0 {
+                self.sample32_tex.zoom *= 2.0;
             }
             if ui.button("Reset").clicked() {
-                self.sample32_tex.width = Self::DEFAULT_SAMPLE_SIZE;
-                self.sample32_tex.height = Self::DEFAULT_SAMPLE_SIZE;
+                self.sample32_tex.zoom = 1.0;
             }
         });
 
@@ -265,11 +242,16 @@ impl Motex {
 
         ui.add_space(8.0);
 
-        // Preview
-        self.preview_tex.width = 128;
-        self.preview_tex.height = ui.available_height() as usize - 5;
-        self.preview_tex
-            .draw(&self.file.data, self.file_pos, ui, ctx);
+        // Preview with scroll bar
+        ScrollArea::vertical().show(ui, |ui| {
+            // Ensure the content is taller than the available height to trigger the scroll bar
+            ui.set_min_height(2000.0);
+
+            self.preview_tex.width = 128;
+            self.preview_tex.height = ui.available_height() as usize - 5;
+            self.preview_tex
+                .draw(&self.file.data, self.file_pos, ui, ctx);
+        });
     }
 
     /// Opens the About window and renders the contents of the window
@@ -347,7 +329,7 @@ impl Motex {
             // If a file is open, display the path.
             if self.file.path.exists() {
                 ui.horizontal(|ui| {
-                    ui.label(format!("File: {:?}", self.file.path));
+                    ui.label(format!("File: {}", self.file.path.display()));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         ui.label(format!("Size: 0x{:X}", self.file.data.len()));
                     });

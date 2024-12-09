@@ -1,12 +1,13 @@
 use std::iter;
 
-use eframe::egui::{self, Color32, ColorImage, Image, TextureHandle, TextureOptions};
+use eframe::egui::{self, Color32, ColorImage, Sense, TextureHandle, TextureOptions};
 use pigment64::{ImageType, NativeImage};
 
 pub struct TexView {
     pub format: ImageType,
     pub width: usize,
     pub height: usize,
+    pub zoom: f32, // Add zoom field
     pub bg_color: Color32,
     pub bg_tex: TextureHandle,
     pub tex: TextureHandle,
@@ -19,6 +20,7 @@ impl TexView {
             format: ImageType::I8,
             width: 0,
             height: 0,
+            zoom: 1.0, // Initialize zoom to 1.0
             bg_color: Color32::from_rgba_premultiplied(0, 0, 0, 255),
             bg_tex: cc.egui_ctx.load_texture(
                 tex_name.to_owned() + "_bg",
@@ -48,11 +50,8 @@ impl TexView {
             .collect();
         self.bg_tex.set(
             data_to_color_image(self.width, self.height, bg_data.as_slice()),
-            TextureOptions::LINEAR,
+            TextureOptions::NEAREST, // Use nearest neighbor filtering for the background
         );
-
-        // Draw bg and save rect for actual texture location
-        let bg_loc = ui.image(&self.bg_tex);
 
         let ni: NativeImage = NativeImage::read(
             &data[offset..],
@@ -67,29 +66,53 @@ impl TexView {
 
         let img_data = pad_to_length(decoded_data, siz);
         let img = data_to_color_image(self.width, self.height, img_data.as_slice());
-        self.tex.set(img, TextureOptions::LINEAR);
 
-        // Put the texture directly over the background
-        let res = ui.put(bg_loc.rect, Image::new(&self.tex));
+        // Use NEAREST filtering for crisp pixels
+        let tex_options = TextureOptions {
+            magnification: egui::TextureFilter::Nearest,
+            minification: egui::TextureFilter::Nearest,
+            ..Default::default()
+        };
+        self.tex.set(img, tex_options);
 
-        let tex_rect = res.rect;
+        // Apply zoom to the texture size
+        let zoomed_size = egui::vec2(
+            self.width as f32 * self.zoom,
+            self.height as f32 * self.zoom,
+        );
 
-        if let Some(cursor_pos) = ctx.input(|i| i.pointer.hover_pos()) {
-            if tex_rect.contains(cursor_pos) {
-                let relative_pos = cursor_pos - tex_rect.min;
-                let pixel = relative_pos.y * self.width as f32 + relative_pos.x;
-                // get index into data from pixel
-                let index = (pixel as usize) * 4;
+        // Create a group to contain the image
+        egui::Frame::none().fill(self.bg_color).show(ui, |ui| {
+            // Use a fixed size area that matches our zoomed dimensions
+            let (res, painter) = ui.allocate_painter(zoomed_size, Sense::hover());
 
-                if index + 3 < data.len() {
-                    let r = data[index];
-                    let g = data[index + 1];
-                    let b = data[index + 2];
-                    let a = data[index + 3];
-                    self.hover_color = Some(Color32::from_rgba_premultiplied(r, g, b, a));
+            // Draw the texture scaled to our zoomed size
+            painter.image(
+                self.tex.id(),
+                res.rect,
+                egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                Color32::WHITE,
+            );
+
+            // Handle hover detection
+            if let Some(cursor_pos) = ctx.input(|i| i.pointer.hover_pos()) {
+                if res.rect.contains(cursor_pos) {
+                    let relative_pos = cursor_pos - res.rect.min;
+                    // Adjust pixel calculation based on zoom
+                    let pixel_x = ((relative_pos.x / zoomed_size.x) * self.width as f32) as usize;
+                    let pixel_y = ((relative_pos.y / zoomed_size.y) * self.height as f32) as usize;
+                    let index = (pixel_y * self.width + pixel_x) * 4;
+
+                    if index + 3 < img_data.len() {
+                        let r = img_data[index];
+                        let g = img_data[index + 1];
+                        let b = img_data[index + 2];
+                        let a = img_data[index + 3];
+                        self.hover_color = Some(Color32::from_rgba_premultiplied(r, g, b, a));
+                    }
                 }
             }
-        }
+        });
     }
 
     pub fn update_dimensions(&mut self, format: ImageType, data_size: usize) {
@@ -115,7 +138,7 @@ impl TexView {
 // Helper function to convert raw image data to egui ColorImage
 fn data_to_color_image(width: usize, height: usize, data: &[u8]) -> ColorImage {
     assert!(data.len() >= width * height * 4);
-    let pixels: Vec<Color32> = data
+    let _pixels: Vec<Color32> = data
         .chunks_exact(4)
         .map(|chunk| Color32::from_rgba_unmultiplied(chunk[0], chunk[1], chunk[2], chunk[3]))
         .collect();
