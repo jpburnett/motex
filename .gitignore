@@ -15,4 +15,7 @@ motex.json
 # Weird macOS files
 .DS_Store
 
+# For any jetbrains users out there
+.idea
+
 config.toml
