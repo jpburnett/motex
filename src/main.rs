@@ -1,18 +1,25 @@
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-use motex::app::Motex;
-fn main() {
+mod app;
+mod file_buffer;
+mod palette_manager;
+mod texture_view;
+mod ui;
+
+use eframe::egui;
+
+fn main() -> eframe::Result<()> {
+    env_logger::init();
+
     let native_options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([1200.0, 800.0])
+            .with_min_inner_size([800.0, 600.0])
+            .with_drag_and_drop(true),
         ..Default::default()
     };
 
-    if let Err(e) = eframe::run_native(
-        "Motex",
+    eframe::run_native(
+        "Motex - N64 Texture Viewer",
         native_options,
-        Box::new(|cc| {
-            egui_extras::install_image_loaders(&cc.egui_ctx);
-            Ok(Box::new(Motex::new(cc)))
-        }),
-    ) {
-        eprintln!("Error running motex: {}", e);
-    }
+        Box::new(|cc| Ok(Box::<app::Texture64App>::default())),
+    )
 }

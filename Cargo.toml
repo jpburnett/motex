@@ -3,15 +3,43 @@ name = "motex"
 version = "0.1.0"
 authors = ["Parker Burnett <jpburnett@byu.net>"]
 edition = "2024"
-rust-version = "1.90"
+rust-version = "1.91"
 publish = false
 readme = "README.md"
 
+[[bin]]
+name = "motex"
+path = "src/main.rs"
+
 [dependencies]
-eframe = { version = "0.30.0", features = ["persistence"] }
-egui_extras = { version = "0.30.0" , features = ["all_loaders"]}
-anyhow = "1.0.95"
-rfd = "0.15.2"
+# N64 texture codec library
 pigment64 = "0.4.5"
-strum = "0.26.3"
-open = "5.3.2"
+
+# GUI framework
+egui = "0.33"
+eframe = { version = "0.33", default-features = true, features = ["default_fonts"] }
+
+# Image handling
+image = "0.25"
+
+# File operations
+rfd = "0.15"
+
+# Clipboard
+arboard = "3.4"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "2.0.17"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+
+# Logging
+log = "0.4"
+env_logger = "0.11"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
