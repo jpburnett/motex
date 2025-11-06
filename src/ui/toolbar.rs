@@ -1,235 +1,75 @@
-use crate::app::Texture64App;
-use crate::texture_view::ImageFormat;
-use eframe::egui;
+use gpui::{InteractiveElement, IntoElement, MouseButton, ParentElement, Styled, div, px, rgb};
 
-pub fn render_toolbar(app: &mut Texture64App, ui: &mut egui::Ui) {
-    egui::MenuBar::new().ui(ui, |ui| {
-        ui.menu_button("File", |ui| {
-            if ui.button("Open... (Ctrl+O)").clicked() {
-                app.ui_open_file();
-                ui.close();
-            }
-            if ui.button("Save (Ctrl+S)").clicked() {
-                let _ = app.save_file();
-                ui.close();
-            }
-            if ui.button("Insert... (Ctrl+I)").clicked() {
-                let _ = app.insert_image();
-                ui.close();
-            }
-            ui.separator();
-            if ui.button("Export to PNG...").clicked() {
-                let _ = app.export_texture();
-                ui.close();
-            }
-        });
+/// Toolbar component - floating action bar
+/// Orthogonal: Just provides UI controls, doesn't handle business logic
+pub struct Toolbar {
+    // Will hold toolbar state later
+}
 
-        ui.separator();
+impl Toolbar {
+    pub fn new() -> Self {
+        Self {}
+    }
 
-        // Format selection
-        ui.label("Format:");
-        let mut changed = false;
-        egui::ComboBox::from_id_salt("format_combo")
-            .selected_text(app.texture_view.format.name())
-            .show_ui(ui, |ui| {
-                for &format in ImageFormat::all() {
-                    if ui
-                        .selectable_value(&mut app.texture_view.format, format, format.name())
-                        .clicked()
-                    {
-                        changed = true;
-                    }
-                }
-            });
+    fn render_button(label: impl Into<String>) -> gpui::Div {
+        let label_str = label.into();
+        let label_clone = label_str.clone();
 
-        ui.separator();
+        div()
+            .px_3()
+            .py_1()
+            .rounded_md()
+            .bg(rgb(0x2d2d2d))
+            .text_sm()
+            .text_color(rgb(0xcccccc))
+            .cursor_pointer()
+            .hover(|style| style.bg(rgb(0x3d3d3d)))
+            // --- CHANGED: ---
+            // The closure signature now includes `_window` as the third argument
+            // to match what `on_mouse_down` expects (event, window, cx).
+            .on_mouse_down(MouseButton::Left, move |_event, _window, _cx| {
+                // --- END CHANGE ---
+                log::info!("Button clicked: {}", label_clone);
+            })
+            .child(label_str)
+    }
+}
 
-        // Width control with presets
-        ui.label("Width:");
-        if ui
-            .add(
-                egui::DragValue::new(&mut app.texture_view.width)
-                    .speed(1)
-                    .range(1..=4096),
+impl IntoElement for Toolbar {
+    type Element = gpui::Div;
+
+    fn into_element(self) -> Self::Element {
+        div()
+            .absolute()
+            .top_4()
+            .left_4()
+            .right_4()
+            .flex()
+            .items_center()
+            .justify_between()
+            .px_4()
+            .h(px(48.0))
+            .bg(rgb(0x252526))
+            .border_1()
+            .border_color(rgb(0x3d3d3d))
+            .rounded_lg()
+            .shadow_lg()
+            .child(
+                // Left side - file operations
+                div()
+                    .flex()
+                    .gap_2()
+                    .child(Self::render_button("Open"))
+                    .child(Self::render_button("Export")),
             )
-            .changed()
-        {
-            changed = true;
-        }
-
-        // Width presets
-        ui.horizontal(|ui| {
-            if ui.small_button("8").clicked() {
-                app.texture_view.width = 8;
-                changed = true;
-            }
-            if ui.small_button("16").clicked() {
-                app.texture_view.width = 16;
-                changed = true;
-            }
-            if ui.small_button("32").clicked() {
-                app.texture_view.width = 32;
-                changed = true;
-            }
-            if ui.small_button("64").clicked() {
-                app.texture_view.width = 64;
-                changed = true;
-            }
-            if ui.small_button("128").clicked() {
-                app.texture_view.width = 128;
-                changed = true;
-            }
-            if ui.small_button("256").clicked() {
-                app.texture_view.width = 256;
-                changed = true;
-            }
-            if ui.small_button("512").clicked() {
-                app.texture_view.width = 512;
-                changed = true;
-            }
-            if ui.small_button("1024").clicked() {
-                app.texture_view.width = 1024;
-                changed = true;
-            }
-        });
-
-        ui.separator();
-
-        // Height control with presets
-        ui.label("Height:");
-        if ui
-            .add(
-                egui::DragValue::new(&mut app.texture_view.height)
-                    .speed(1)
-                    .range(1..=4096),
+            .child(
+                // Right side - view controls
+                div()
+                    .flex()
+                    .gap_2()
+                    .items_center()
+                    .child(div().text_sm().text_color(rgb(0x888888)).child("100%"))
+                    .child(Self::render_button("Fit")),
             )
-            .changed()
-        {
-            changed = true;
-        }
-
-        // Height presets
-        ui.horizontal(|ui| {
-            if ui.small_button("8").clicked() {
-                app.texture_view.height = 8;
-                changed = true;
-            }
-            if ui.small_button("16").clicked() {
-                app.texture_view.height = 16;
-                changed = true;
-            }
-            if ui.small_button("32").clicked() {
-                app.texture_view.height = 32;
-                changed = true;
-            }
-            if ui.small_button("64").clicked() {
-                app.texture_view.height = 64;
-                changed = true;
-            }
-            if ui.small_button("128").clicked() {
-                app.texture_view.height = 128;
-                changed = true;
-            }
-            if ui.small_button("256").clicked() {
-                app.texture_view.height = 256;
-                changed = true;
-            }
-        });
-
-        ui.separator();
-
-        // Scale control
-        ui.label("Scale:");
-        ui.add(
-            egui::DragValue::new(&mut app.scale)
-                .speed(0.1)
-                .range(0.1..=10.0),
-        );
-
-        ui.separator();
-
-        // Background color picker
-        ui.label("BG:");
-        ui.color_edit_button_srgba(&mut app.background_color);
-
-        if changed {
-            app.update_texture();
-        }
-    });
-
-    // Second row for palette controls (only shown for CI formats)
-    if app.texture_view.format.is_ci() {
-        ui.horizontal(|ui| {
-            ui.label("Palette Controls:");
-
-            ui.separator();
-
-            ui.label("Palette Offset:");
-            if ui
-                .add(
-                    egui::DragValue::new(&mut app.texture_view.palette_offset)
-                        .speed(1)
-                        .range(0..=usize::MAX)
-                        .hexadecimal(8, false, true),
-                )
-                .changed()
-            {
-                app.update_texture();
-            }
-
-            ui.separator();
-
-            let mut split_changed = false;
-            if ui
-                .checkbox(&mut app.texture_view.split_palette_enabled, "Split Palette")
-                .changed()
-            {
-                split_changed = true;
-            }
-
-            if app.texture_view.split_palette_enabled {
-                ui.label("Split Offset:");
-                if ui
-                    .add(
-                        egui::DragValue::new(&mut app.texture_view.split_palette_offset)
-                            .speed(1)
-                            .range(0..=usize::MAX)
-                            .hexadecimal(8, false, true),
-                    )
-                    .changed()
-                {
-                    split_changed = true;
-                }
-            }
-
-            ui.separator();
-
-            if app.palette_manager.has_external_palette() {
-                ui.label(format!(
-                    "External: {}",
-                    app.palette_manager
-                        .external_palette_filename()
-                        .unwrap_or_default()
-                ));
-                if ui.button("Clear").clicked() {
-                    app.palette_manager.clear_external_palette();
-                    app.update_texture();
-                }
-            } else {
-                if ui.button("Load External Palette...").clicked() {
-                    if let Some(path) = rfd::FileDialog::new()
-                        .add_filter("Binary files", &["bin", "pal"])
-                        .pick_file()
-                    {
-                        let _ = app.palette_manager.load_external_palette(path);
-                        app.update_texture();
-                    }
-                }
-            }
-
-            if split_changed {
-                app.update_texture();
-            }
-        });
     }
 }

@@ -1,25 +1,37 @@
+use gpui::{App, AppContext, Application, Bounds, WindowBounds, WindowOptions, px, size};
+
 mod app;
-mod file_buffer;
-mod palette_manager;
-mod texture_view;
 mod ui;
 
-use eframe::egui;
+use app::TextureViewerApp;
+use ui::theme::Theme;
 
-fn main() -> eframe::Result<()> {
-    env_logger::init();
+fn main() {
+    // Initialize logging - set RUST_LOG=debug to see all logs
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
-    let native_options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1200.0, 800.0])
-            .with_min_inner_size([800.0, 600.0])
-            .with_drag_and_drop(true),
-        ..Default::default()
-    };
+    log::info!("Starting Texture Viewer application");
 
-    eframe::run_native(
-        "Motex - N64 Texture Viewer",
-        native_options,
-        Box::new(|cc| Ok(Box::<app::Texture64App>::default())),
-    )
+    Application::new().run(|cx: &mut App| {
+        // Initialize and register the theme as a global
+        cx.set_global(Theme::new());
+
+        // Center the window with a reasonable default size for a texture viewer
+        let bounds = Bounds::centered(None, size(px(1200.0), px(800.0)), cx);
+
+        cx.open_window(
+            WindowOptions {
+                window_bounds: Some(WindowBounds::Windowed(bounds)),
+                titlebar: Some(gpui::TitlebarOptions {
+                    title: Some("Texture Viewer".into()),
+                    appears_transparent: false,
+                    traffic_light_position: None,
+                }),
+                // Use default values for all other WindowOptions fields
+                ..Default::default()
+            },
+            |_, cx| cx.new(|_| TextureViewerApp::new()),
+        )
+        .unwrap();
+    });
 }
