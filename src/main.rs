@@ -1,6 +1,7 @@
 use gpui::{App, AppContext, Application, Bounds, WindowBounds, WindowOptions, px, size};
 
 mod app;
+mod io;
 mod ui;
 
 use app::TextureViewerApp;

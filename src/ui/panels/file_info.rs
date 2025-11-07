@@ -1,17 +1,19 @@
-use gpui::{IntoElement, ParentElement, Styled, div, rgb};
+use gpui::{IntoElement, ParentElement, Styled, div};
+
+use crate::ui::theme::Theme;
 
 /// File Info Panel - displays file metadata
 /// Orthogonal: Only responsible for displaying file information
-pub struct FileInfoPanel {
-    // Will hold file metadata later
+pub struct FileInfoPanel<'a> {
+    theme: &'a Theme,
 }
 
-impl FileInfoPanel {
-    pub fn new() -> Self {
-        Self {}
+impl<'a> FileInfoPanel<'a> {
+    pub fn new(theme: &'a Theme) -> Self {
+        Self { theme }
     }
 
-    fn render_row(label: impl Into<String>, value: impl Into<String>) -> gpui::Div {
+    fn render_row(label: impl Into<String>, value: impl Into<String>, theme: &Theme) -> gpui::Div {
         div()
             .flex()
             .justify_between()
@@ -19,19 +21,14 @@ impl FileInfoPanel {
             .child(
                 div()
                     .text_xs()
-                    .text_color(rgb(0x888888))
+                    .text_color(theme.text_muted)
                     .child(label.into()),
             )
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(rgb(0xcccccc))
-                    .child(value.into()),
-            )
+            .child(div().text_xs().text_color(theme.text).child(value.into()))
     }
 }
 
-impl IntoElement for FileInfoPanel {
+impl<'a> IntoElement for FileInfoPanel<'a> {
     type Element = gpui::Div;
 
     fn into_element(self) -> Self::Element {
@@ -41,14 +38,14 @@ impl IntoElement for FileInfoPanel {
             .px_4()
             .py_3()
             .border_b_1()
-            .border_color(rgb(0x3d3d3d))
+            .border_color(self.theme.border)
             .child(
                 // Panel title
                 div()
                     .mb_2()
                     .text_xs()
                     .font_weight(gpui::FontWeight::SEMIBOLD)
-                    .text_color(rgb(0xaaaaaa))
+                    .text_color(self.theme.text_accent)
                     .child("FILE INFO"),
             )
             .child(
@@ -56,9 +53,10 @@ impl IntoElement for FileInfoPanel {
                     .flex()
                     .flex_col()
                     .gap_1()
-                    .child(Self::render_row("Name", "No file loaded"))
-                    .child(Self::render_row("Size", "—"))
-                    .child(Self::render_row("Offset", "0x0000")),
+                    .child(Self::render_row("Name", "No file loaded", self.theme))
+                    .child(Self::render_row("Size", "—", self.theme))
+                    .child(Self::render_row("Offset", "0x0000", self.theme)),
             )
     }
 }
+

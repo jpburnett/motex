@@ -1,22 +1,24 @@
-use gpui::{IntoElement, ParentElement, Styled, div, px, rgb};
+use gpui::{IntoElement, ParentElement, Styled, div, px};
 
 use super::panels::{
     dimensions::DimensionsPanel, file_info::FileInfoPanel, format_selector::FormatSelectorPanel,
 };
+use super::theme::Theme;
 
 /// Inspector component - right sidebar with collapsible panels
 /// Orthogonal: Composes panels but doesn't implement their logic
-pub struct Inspector {
+pub struct Inspector<'a> {
     width: f32,
+    theme: &'a Theme,
 }
 
-impl Inspector {
-    pub fn new(width: f32) -> Self {
-        Self { width }
+impl<'a> Inspector<'a> {
+    pub fn new(width: f32, theme: &'a Theme) -> Self {
+        Self { width, theme }
     }
 }
 
-impl IntoElement for Inspector {
+impl<'a> IntoElement for Inspector<'a> {
     type Element = gpui::Div;
 
     fn into_element(self) -> Self::Element {
@@ -24,9 +26,9 @@ impl IntoElement for Inspector {
             .flex()
             .flex_col()
             .w(px(self.width))
-            .bg(rgb(0x252526))
+            .bg(self.theme.surface)
             .border_l_1()
-            .border_color(rgb(0x3d3d3d))
+            .border_color(self.theme.border)
             .child(
                 // Inspector header
                 div()
@@ -36,12 +38,12 @@ impl IntoElement for Inspector {
                     .px_4()
                     .h(px(48.0))
                     .border_b_1()
-                    .border_color(rgb(0x3d3d3d))
+                    .border_color(self.theme.border)
                     .child(
                         div()
                             .text_sm()
                             .font_weight(gpui::FontWeight::BOLD)
-                            .text_color(rgb(0xcccccc))
+                            .text_color(self.theme.text)
                             .child("Properties"),
                     ),
             )
@@ -50,9 +52,9 @@ impl IntoElement for Inspector {
                 div()
                     .flex()
                     .flex_col()
-                    .child(FileInfoPanel::new())
-                    .child(FormatSelectorPanel::new())
-                    .child(DimensionsPanel::new()),
+                    .child(FileInfoPanel::new(self.theme))
+                    .child(FormatSelectorPanel::new(self.theme))
+                    .child(DimensionsPanel::new(self.theme)),
             )
     }
 }
