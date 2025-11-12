@@ -1,8 +1,5 @@
 use gpui::{Rgba, rgb};
 
-/// A struct to hold all the colors for the application.
-/// We `#[derive(Clone)]` so it can be easily stored
-/// and retrieved from the `gpui::AppContext`.
 #[derive(Clone)]
 pub struct Theme {
     pub background: Rgba,
@@ -29,6 +26,4 @@ impl Theme {
     }
 }
 
-// Add this implementation to satisfy the `gpui::Global` trait bound.
-// This tells gpui that Theme can be stored and retrieved as a global.
 impl gpui::Global for Theme {}

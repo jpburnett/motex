@@ -1,4 +1,6 @@
-use gpui::{App, AppContext, Application, Bounds, WindowBounds, WindowOptions, px, size};
+use gpui::AppContext;
+use gpui::{App, Application, Bounds, WindowBounds, WindowOptions, px, size};
+use gpui_component::theme::Theme as GpuiTheme;
 
 mod app;
 mod io;
@@ -8,16 +10,13 @@ use app::TextureViewerApp;
 use ui::theme::Theme;
 
 fn main() {
-    // Initialize logging - set RUST_LOG=debug to see all logs
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
-
     log::info!("Starting Texture Viewer application");
 
     Application::new().run(|cx: &mut App| {
-        // Initialize and register the theme as a global
+        cx.set_global(GpuiTheme::default());
         cx.set_global(Theme::new());
 
-        // Center the window with a reasonable default size for a texture viewer
         let bounds = Bounds::centered(None, size(px(1200.0), px(800.0)), cx);
 
         cx.open_window(
@@ -25,10 +24,9 @@ fn main() {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
                 titlebar: Some(gpui::TitlebarOptions {
                     title: Some("Texture Viewer".into()),
-                    appears_transparent: false,
+                    appears_transparent: true,
                     traffic_light_position: None,
                 }),
-                // Use default values for all other WindowOptions fields
                 ..Default::default()
             },
             |_, cx| cx.new(|_| TextureViewerApp::new()),

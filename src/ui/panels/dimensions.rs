@@ -6,11 +6,17 @@ use crate::ui::theme::Theme;
 /// Orthogonal: Just handles dimension input, doesn't do decoding
 pub struct DimensionsPanel<'a> {
     theme: &'a Theme,
+    width: u32,
+    height: u32,
 }
 
 impl<'a> DimensionsPanel<'a> {
-    pub fn new(theme: &'a Theme) -> Self {
-        Self { theme }
+    pub fn new(theme: &'a Theme, width: u32, height: u32) -> Self {
+        Self {
+            theme,
+            width,
+            height,
+        }
     }
 
     fn render_input_field(
