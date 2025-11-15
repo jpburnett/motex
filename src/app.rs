@@ -163,7 +163,7 @@ impl Render for TextureViewerApp {
                             .flex()
                             .flex_1()
                             .relative()
-                            .child(Canvas::new(theme))
+                            .child(Canvas::new(theme, self.current_file.as_ref()))
                             // Zoom Controls
                             .child(
                                 div()
@@ -195,28 +195,6 @@ impl Render for TextureViewerApp {
                                             .child("Fit"),
                                     ),
                             )
-                            // Inspector Toggle
-                            .child(
-                                div()
-                                    .absolute()
-                                    .top(px(68.0))
-                                    .right_4()
-                                    .px_3()
-                                    .py_2()
-                                    .rounded_md()
-                                    .bg(theme.surface)
-                                    .border_1()
-                                    .border_color(theme.border)
-                                    .text_sm()
-                                    .text_color(theme.text)
-                                    .cursor_pointer()
-                                    .hover(|style| style.bg(theme.hover))
-                                    .on_mouse_down(
-                                        gpui::MouseButton::Left,
-                                        cx.listener(Self::toggle_inspector),
-                                    )
-                                    .child(if self.inspector_open { "◀" } else { "▶" }),
-                            )
                             // Collapsible File Menu
                             .child(div().when(self.menu_open, |this| {
                                 this.absolute()
@@ -232,6 +210,27 @@ impl Render for TextureViewerApp {
                                     .border_color(theme.border)
                                     .rounded_lg()
                                     .shadow_lg()
+                                    .child(
+                                        // ADD THIS: Toggle Properties button
+                                        div()
+                                            .px_3()
+                                            .py_1()
+                                            .rounded_md()
+                                            .bg(theme.surface)
+                                            .text_sm()
+                                            .text_color(theme.text)
+                                            .cursor_pointer()
+                                            .hover(|style| style.bg(theme.hover))
+                                            .on_mouse_down(
+                                                MouseButton::Left,
+                                                cx.listener(Self::toggle_inspector),
+                                            )
+                                            .child(if self.inspector_open {
+                                                "Hide Properties"
+                                            } else {
+                                                "Show Properties"
+                                            }),
+                                    )
                                     .child(
                                         // Open button
                                         div()

@@ -17,7 +17,7 @@ pigment64 = "0.4.5"
 
 # GUI framework
 gpui = "*"
-gpui-component = "0.4.0-preview1"
+gpui-component = "0.4.0-preview3"
 
 # Logging
 log = "0.4"

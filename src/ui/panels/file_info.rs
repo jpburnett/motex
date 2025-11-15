@@ -1,6 +1,7 @@
 use gpui::{IntoElement, ParentElement, Styled, div};
 
-use crate::{io::loader::LoadedFile, ui::theme::Theme};
+use crate::io::loader::LoadedFile;
+use crate::ui::theme::Theme;
 
 /// File Info Panel - displays file metadata
 /// Orthogonal: Only responsible for displaying file information
@@ -27,25 +28,22 @@ impl<'a> FileInfoPanel<'a> {
             )
             .child(div().text_xs().text_color(theme.text).child(value.into()))
     }
+
+    fn format_size(bytes: u64) -> String {
+        if bytes < 1024 {
+            format!("{} B", bytes)
+        } else if bytes < 1024 * 1024 {
+            format!("{:.2} KB", bytes as f64 / 1024.0)
+        } else {
+            format!("{:.2} MB", bytes as f64 / (1024.0 * 1024.0))
+        }
+    }
 }
 
 impl<'a> IntoElement for FileInfoPanel<'a> {
     type Element = gpui::Div;
 
     fn into_element(self) -> Self::Element {
-        let (name, size, offset) = if let Some(info) = self.file_info {
-            (
-                info.name.clone(),
-                format!("{} bytes", info.size),
-                "0x0000".to_string(),
-            )
-        } else {
-            (
-                "No file loaded".to_string(),
-                "—".to_string(),
-                "—".to_string(),
-            )
-        };
         div()
             .flex()
             .flex_col()
@@ -67,9 +65,28 @@ impl<'a> IntoElement for FileInfoPanel<'a> {
                     .flex()
                     .flex_col()
                     .gap_1()
-                    .child(Self::render_row("Name", name, self.theme))
-                    .child(Self::render_row("Size", size, self.theme))
-                    .child(Self::render_row("Offset", offset, self.theme)),
+                    .child(Self::render_row(
+                        "Name",
+                        self.file_info
+                            .map(|f| f.name.clone())
+                            .unwrap_or_else(|| "No file loaded".to_string()),
+                        self.theme,
+                    ))
+                    .child(Self::render_row(
+                        "Size",
+                        self.file_info
+                            .map(|f| Self::format_size(f.size))
+                            .unwrap_or_else(|| "—".to_string()),
+                        self.theme,
+                    ))
+                    .child(Self::render_row(
+                        "Path",
+                        self.file_info
+                            .and_then(|f| f.path.parent())
+                            .and_then(|p| p.to_str())
+                            .unwrap_or("—"),
+                        self.theme,
+                    )),
             )
     }
 }
