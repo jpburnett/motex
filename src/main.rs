@@ -3,7 +3,9 @@ use gpui::{App, Application, Bounds, WindowBounds, WindowOptions, px, size};
 use gpui_component::theme::Theme as GpuiTheme;
 
 mod app;
+mod formats;
 mod io;
+mod texture;
 mod ui;
 
 use app::TextureViewerApp;

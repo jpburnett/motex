@@ -4,24 +4,35 @@ use super::panels::{
     dimensions::DimensionsPanel, file_info::FileInfoPanel, format_selector::FormatSelectorPanel,
 };
 use super::theme::Theme;
+use crate::formats::adapter::TextureFormat;
 use crate::io::loader::LoadedFile;
 
 /// Inspector component - right sidebar with collapsible panels
-/// Orthogonal: Composes panels but doesn't implement their logic
 pub struct Inspector<'a> {
     width: f32,
     theme: &'a Theme,
     file_info: Option<&'a LoadedFile>,
-    show_close: bool,
+    selected_format: TextureFormat,
+    texture_width: u32,
+    texture_height: u32,
 }
 
 impl<'a> Inspector<'a> {
-    pub fn new(width: f32, theme: &'a Theme, file_info: Option<&'a LoadedFile>) -> Self {
+    pub fn new(
+        width: f32,
+        theme: &'a Theme,
+        file_info: Option<&'a LoadedFile>,
+        selected_format: TextureFormat,
+        texture_width: u32,
+        texture_height: u32,
+    ) -> Self {
         Self {
             width,
             theme,
             file_info,
-            show_close: true,
+            selected_format,
+            texture_width,
+            texture_height,
         }
     }
 }
@@ -41,7 +52,6 @@ impl<'a> IntoElement for Inspector<'a> {
             .border_l_1()
             .border_color(self.theme.border)
             .child(
-                // Inspector header with close button
                 div()
                     .flex()
                     .items_center()
@@ -58,7 +68,6 @@ impl<'a> IntoElement for Inspector<'a> {
                             .child("Properties"),
                     )
                     .child(
-                        // Close button (Zed-style) - we'll wire this up differently
                         div()
                             .px_2()
                             .py_1()
@@ -67,18 +76,21 @@ impl<'a> IntoElement for Inspector<'a> {
                             .text_color(self.theme.text_muted)
                             .cursor_pointer()
                             .hover(move |style| style.bg(hover_color).text_color(text_color))
-                            .id("inspector-close") // Add an ID so we can target it
+                            .id("inspector-close")
                             .child("✕"),
                     ),
             )
             .child(
-                // Inspector panels (each is orthogonal)
                 div()
                     .flex()
                     .flex_col()
                     .child(FileInfoPanel::new(self.theme, self.file_info))
-                    .child(FormatSelectorPanel::new(self.theme))
-                    .child(DimensionsPanel::new(self.theme, 64, 64)), // Default dimensions
+                    .child(FormatSelectorPanel::new(self.theme, self.selected_format))
+                    .child(DimensionsPanel::new(
+                        self.theme,
+                        self.texture_width,
+                        self.texture_height,
+                    )),
             )
     }
 }

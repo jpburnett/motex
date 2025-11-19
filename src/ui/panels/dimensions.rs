@@ -1,9 +1,9 @@
-use gpui::{IntoElement, ParentElement, Styled, div};
+use gpui::{InteractiveElement, IntoElement, ParentElement, Styled, div};
 
 use crate::ui::theme::Theme;
 
 /// Dimensions Panel - width/height controls for raw texture data
-/// Orthogonal: Just handles dimension input, doesn't do decoding
+/// Now with clickable presets!
 pub struct DimensionsPanel<'a> {
     theme: &'a Theme,
     width: u32,
@@ -47,6 +47,21 @@ impl<'a> DimensionsPanel<'a> {
                     .child(value.into()),
             )
     }
+
+    fn render_preset(&self, size: u32) -> gpui::Div {
+        let hover_color = self.theme.hover;
+
+        div()
+            .px_2()
+            .py_1()
+            .rounded_md()
+            .bg(self.theme.surface)
+            .text_xs()
+            .text_color(self.theme.text_accent)
+            .cursor_pointer()
+            .hover(move |style| style.bg(hover_color))
+            .child(format!("{}×{}", size, size))
+    }
 }
 
 impl<'a> IntoElement for DimensionsPanel<'a> {
@@ -61,7 +76,6 @@ impl<'a> IntoElement for DimensionsPanel<'a> {
             .border_b_1()
             .border_color(self.theme.border)
             .child(
-                // Panel title
                 div()
                     .mb_2()
                     .text_xs()
@@ -73,46 +87,27 @@ impl<'a> IntoElement for DimensionsPanel<'a> {
                 div()
                     .flex()
                     .gap_3()
-                    .child(Self::render_input_field("Width", "64", self.theme))
-                    .child(Self::render_input_field("Height", "64", self.theme)),
+                    .child(Self::render_input_field(
+                        "Width",
+                        self.width.to_string(),
+                        self.theme,
+                    ))
+                    .child(Self::render_input_field(
+                        "Height",
+                        self.height.to_string(),
+                        self.theme,
+                    )),
             )
             .child(
-                // Common presets
                 div()
                     .flex()
                     .gap_2()
                     .mt_3()
                     .flex_wrap()
-                    .child(
-                        div()
-                            .px_2()
-                            .py_1()
-                            .rounded_md()
-                            .bg(self.theme.surface)
-                            .text_xs()
-                            .text_color(self.theme.text_accent)
-                            .child("32×32"),
-                    )
-                    .child(
-                        div()
-                            .px_2()
-                            .py_1()
-                            .rounded_md()
-                            .bg(self.theme.surface)
-                            .text_xs()
-                            .text_color(self.theme.text_accent)
-                            .child("64×64"),
-                    )
-                    .child(
-                        div()
-                            .px_2()
-                            .py_1()
-                            .rounded_md()
-                            .bg(self.theme.surface)
-                            .text_xs()
-                            .text_color(self.theme.text_accent)
-                            .child("128×128"),
-                    ),
+                    .child(self.render_preset(32))
+                    .child(self.render_preset(64))
+                    .child(self.render_preset(128))
+                    .child(self.render_preset(256)),
             )
     }
 }

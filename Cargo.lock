@@ -3518,6 +3518,7 @@ dependencies = [
  "env_logger",
  "gpui",
  "gpui-component",
+ "image",
  "log",
  "pigment64",
  "rfd",

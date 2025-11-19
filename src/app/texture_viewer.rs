@@ -4,19 +4,19 @@ use gpui::{
 };
 use gpui_component::TitleBar;
 
-use crate::io::loader::LoadedFile;
+use super::state::AppState;
 use crate::ui::{canvas::Canvas, inspector::Inspector, theme::Theme};
 
-/// Main application state - orchestrates the layout
+/// Main application component - orchestrates the layout
+/// Uses AppState for data, focuses on UI composition
 pub struct TextureViewerApp {
-    // UI state
+    // UI state (ephemeral, not saved)
     inspector_open: bool,
     inspector_width: f32,
     menu_open: bool,
 
-    // App state
-    current_file: Option<LoadedFile>,
-    _zoom_level: f32,
+    // Application state (the important data)
+    state: AppState,
 }
 
 impl TextureViewerApp {
@@ -26,8 +26,7 @@ impl TextureViewerApp {
             inspector_open: true,
             inspector_width: 300.0,
             menu_open: false,
-            current_file: None,
-            _zoom_level: 1.0,
+            state: AppState::new(),
         }
     }
 
@@ -61,6 +60,38 @@ impl TextureViewerApp {
         );
     }
 
+    fn decode_current_texture(&mut self) {
+        // NEW:
+        if self.state.has_file() {
+            log::info!(
+                "Attempting to decode: format={:?}, size={}x{}",
+                self.state.selected_format,
+                self.state.texture_width,
+                self.state.texture_height
+            );
+
+            // We need to borrow the file data, so still use current_file directly here
+            if let Some(file) = &self.state.current_file {
+                match crate::formats::adapter::decode_texture(
+                    &file.data,
+                    self.state.selected_format,
+                    self.state.texture_width,
+                    self.state.texture_height,
+                    None,
+                ) {
+                    Ok(texture) => {
+                        log::info!("Texture decoded successfully!");
+                        self.state.decoded_texture = Some(texture);
+                    }
+                    Err(e) => {
+                        log::error!("Failed to decode texture: {}", e);
+                        self.state.decoded_texture = None;
+                    }
+                }
+            }
+        }
+    }
+
     fn open_file(
         &mut self,
         _event: &gpui::MouseDownEvent,
@@ -76,8 +107,11 @@ impl TextureViewerApp {
                     loaded_file.name,
                     loaded_file.size
                 );
-                self.current_file = Some(loaded_file);
+                self.state.current_file = Some(loaded_file);
                 self.menu_open = false;
+
+                self.decode_current_texture();
+
                 cx.notify();
             }
             Err(e) => {
@@ -96,20 +130,12 @@ impl Render for TextureViewerApp {
             0.0
         };
 
-        // Display file name if loaded
-        let file_name = self
-            .current_file
-            .as_ref()
-            .map(|f| f.name.clone())
-            .unwrap_or_else(|| "Texture Viewer".to_string());
-
         div()
             .flex()
             .flex_col()
             .size_full()
             .bg(theme.background)
             .child(
-                // Custom Title Bar
                 TitleBar::new().child(
                     div()
                         .flex()
@@ -120,7 +146,6 @@ impl Render for TextureViewerApp {
                         .border_b_1()
                         .border_color(theme.border)
                         .child(
-                            // Hamburger Menu Button
                             div()
                                 .ml_2()
                                 .px_3()
@@ -138,33 +163,26 @@ impl Render for TextureViewerApp {
                                 .child("☰"),
                         )
                         .child(
-                            // Centered Title Text
                             div().flex_1().flex().justify_center().items_center().child(
                                 div()
                                     .text_sm()
                                     .text_color(theme.text_muted)
-                                    .child(file_name),
+                                    .child(self.state.file_name()),
                             ),
                         )
-                        .child(
-                            // Placeholder for window control buttons
-                            div().w(px(60.0)).mr_2(),
-                        ),
+                        .child(div().w(px(60.0)).mr_2()),
                 ),
             )
             .child(
-                // Main Content Area
                 div()
                     .flex()
                     .flex_1()
                     .child(
-                        // Canvas region
                         div()
                             .flex()
                             .flex_1()
                             .relative()
-                            .child(Canvas::new(theme, self.current_file.as_ref()))
-                            // Zoom Controls
+                            .child(Canvas::new(theme, self.state.current_file.as_ref()))
                             .child(
                                 div()
                                     .absolute()
@@ -195,7 +213,6 @@ impl Render for TextureViewerApp {
                                             .child("Fit"),
                                     ),
                             )
-                            // Collapsible File Menu
                             .child(div().when(self.menu_open, |this| {
                                 this.absolute()
                                     .top_0()
@@ -211,7 +228,6 @@ impl Render for TextureViewerApp {
                                     .rounded_lg()
                                     .shadow_lg()
                                     .child(
-                                        // ADD THIS: Toggle Properties button
                                         div()
                                             .px_3()
                                             .py_1()
@@ -232,7 +248,6 @@ impl Render for TextureViewerApp {
                                             }),
                                     )
                                     .child(
-                                        // Open button
                                         div()
                                             .px_3()
                                             .py_1()
@@ -249,7 +264,6 @@ impl Render for TextureViewerApp {
                                             .child("Open"),
                                     )
                                     .child(
-                                        // Export button
                                         div()
                                             .px_3()
                                             .py_1()
@@ -263,12 +277,14 @@ impl Render for TextureViewerApp {
                                     )
                             })),
                     )
-                    // Right-side Inspector Panel
                     .when(self.inspector_open, |this| {
                         this.child(Inspector::new(
                             inspector_width,
                             theme,
-                            self.current_file.as_ref(),
+                            self.state.current_file.as_ref(),
+                            self.state.selected_format, // Pass current format
+                            self.state.texture_width,   // Pass current dimensions
+                            self.state.texture_height,
                         ))
                     }),
             )
