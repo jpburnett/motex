@@ -1,6 +1,7 @@
+use crate::actions::AppAction;
 use crate::file_buffer::FileBuffer;
 use crate::palette_manager::PaletteManager;
-use crate::texture_view::TextureViewState;
+use crate::texture_view::{ScrollMode, TextureViewState};
 use anyhow::Result;
 use eframe::egui;
 
@@ -58,8 +59,6 @@ mod color32_serde {
 #[derive(Clone)]
 enum PendingAction {
     OpenFile(std::path::PathBuf),
-    InsertImage,
-    NewFile,
 }
 
 impl Default for Texture64App {
@@ -68,8 +67,8 @@ impl Default for Texture64App {
             file_buffer: FileBuffer::default(),
             texture_view: TextureViewState::default(),
             palette_manager: PaletteManager::default(),
-            background_color: egui::Color32::from_rgb(128, 128, 128),
-            scale: 1.0,
+            background_color: egui::Color32::from_rgb(40, 40, 40), // Modern Dark Gray Default
+            scale: 2.0,                                            // Easier to see by default
             show_pixel_info: true,
             hovered_pixel: None,
             texture_handle: None,
@@ -80,10 +79,37 @@ impl Default for Texture64App {
 }
 
 impl Texture64App {
+    pub fn process_action(&mut self, action: AppAction) {
+        match action {
+            AppAction::OpenFileDialog => self.ui_open_file(),
+            AppAction::SaveFile => {
+                let _ = self.save_file();
+            }
+            AppAction::InsertImageDialog => {
+                let _ = self.insert_image();
+            }
+            AppAction::ExportTextureDialog => {
+                let _ = self.export_texture();
+            }
+            AppAction::UpdateTexture => self.update_texture(),
+            AppAction::CopyToClipboard => {
+                let _ = self.copy_to_clipboard();
+            }
+            AppAction::AdjustOffset { delta, mode } => {
+                self.texture_view
+                    .adjust_offset(delta, self.file_buffer.len(), mode);
+                self.update_texture();
+            }
+            AppAction::Quit => {
+                // eframe handles close via viewport events usually
+            }
+        }
+    }
+
     pub fn open_file(&mut self, path: std::path::PathBuf) -> Result<()> {
         self.file_buffer.load_file(path)?;
         self.texture_view.offset = 0;
-        self.texture_handle = None; // Clear old texture
+        self.texture_handle = None;
         self.update_texture();
         Ok(())
     }
@@ -109,15 +135,12 @@ impl Texture64App {
 
     pub fn insert_image(&mut self) -> Result<()> {
         if let Some(path) = rfd::FileDialog::new()
-            .add_filter("Image files", &["png", "jpg", "jpeg", "bmp"])
+            .add_filter("Image files", &["png", "jpg"])
             .pick_file()
         {
             let img = image::open(path)?;
             let rgba = img.to_rgba8();
-
-            // Convert RGBA to N64 format at current offset
             let n64_data = self.texture_view.encode_to_n64(&rgba)?;
-
             self.file_buffer
                 .insert_data(self.texture_view.offset, &n64_data)?;
             self.update_texture();
@@ -127,9 +150,7 @@ impl Texture64App {
 
     pub fn export_texture(&mut self) -> Result<()> {
         if let Some(path) = rfd::FileDialog::new()
-            .add_filter("PNG Image", &["png"])
-            .add_filter("JPEG Image", &["jpg", "jpeg"])
-            .add_filter("BMP Image", &["bmp"])
+            .add_filter("PNG", &["png"])
             .save_file()
         {
             if let Some(rgba_data) = self.texture_view.get_current_rgba() {
@@ -139,7 +160,6 @@ impl Texture64App {
                     rgba_data,
                 )
                 .ok_or_else(|| anyhow::anyhow!("Failed to create image"))?;
-
                 img.save(path)?;
             }
         }
@@ -153,24 +173,13 @@ impl Texture64App {
                 self.texture_view.height,
                 rgba_data,
             )
-            .ok_or_else(|| anyhow::anyhow!("Failed to create image"))?;
-
-            // Try to copy to clipboard, but don't fail if it doesn't work
-            match arboard::Clipboard::new() {
-                Ok(mut clipboard) => {
-                    let img_data = arboard::ImageData {
-                        width: img.width() as usize,
-                        height: img.height() as usize,
-                        bytes: img.as_raw().into(),
-                    };
-
-                    if let Err(e) = clipboard.set_image(img_data) {
-                        log::warn!("Failed to copy to clipboard: {}", e);
-                    }
-                }
-                Err(e) => {
-                    log::warn!("Failed to initialize clipboard: {}", e);
-                }
+            .ok_or_else(|| anyhow::anyhow!("Bad image"))?;
+            if let Ok(mut cb) = arboard::Clipboard::new() {
+                let _ = cb.set_image(arboard::ImageData {
+                    width: img.width() as usize,
+                    height: img.height() as usize,
+                    bytes: img.as_raw().into(),
+                });
             }
         }
         Ok(())
@@ -197,88 +206,145 @@ impl Texture64App {
             if !i.raw.dropped_files.is_empty() {
                 if let Some(dropped_file) = i.raw.dropped_files.first() {
                     if let Some(path) = &dropped_file.path {
-                        if self.file_buffer.is_modified() {
-                            self.pending_action = Some(PendingAction::OpenFile(path.clone()));
-                            self.show_save_confirmation = true;
-                        } else {
-                            let _ = self.open_file(path.clone());
-                        }
+                        let _ = self.open_file(path.clone());
                     }
                 }
             }
         });
     }
 
-    fn check_shortcuts(&mut self, ctx: &egui::Context) {
+    // Keyboard Shortcuts for Navigation
+    fn check_input(&mut self, ctx: &egui::Context) -> Vec<AppAction> {
+        let mut actions = Vec::new();
+
+        // File Shortcuts
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::CTRL, egui::Key::O)) {
-            self.ui_open_file();
+            actions.push(AppAction::OpenFileDialog);
         }
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::CTRL, egui::Key::S)) {
             if self.file_buffer.path().is_some() {
-                let _ = self.save_file();
+                actions.push(AppAction::SaveFile);
             }
         }
-        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::CTRL, egui::Key::I)) {
-            let _ = self.insert_image();
+
+        // Navigation Shortcuts
+        if ctx.input(|i| i.key_pressed(egui::Key::ArrowDown)) {
+            let mode = if ctx.input(|i| i.modifiers.shift) {
+                ScrollMode::Pixel
+            } else {
+                ScrollMode::Row
+            };
+            actions.push(AppAction::AdjustOffset { delta: 1, mode });
         }
+        if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
+            let mode = if ctx.input(|i| i.modifiers.shift) {
+                ScrollMode::Pixel
+            } else {
+                ScrollMode::Row
+            };
+            actions.push(AppAction::AdjustOffset { delta: -1, mode });
+        }
+        if ctx.input(|i| i.key_pressed(egui::Key::PageDown)) {
+            actions.push(AppAction::AdjustOffset {
+                delta: 1,
+                mode: ScrollMode::Image,
+            });
+        }
+        if ctx.input(|i| i.key_pressed(egui::Key::PageUp)) {
+            actions.push(AppAction::AdjustOffset {
+                delta: -1,
+                mode: ScrollMode::Image,
+            });
+        }
+
+        actions
     }
 
     fn ui_save_confirmation(&mut self, ctx: &egui::Context) {
         if self.show_save_confirmation {
-            egui::Window::new("Unsaved Changes")
-                .collapsible(false)
-                .resizable(false)
-                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-                .show(ctx, |ui| {
-                    ui.label("The current file has unsaved changes.");
-                    ui.label("Do you want to save before continuing?");
-
-                    ui.horizontal(|ui| {
-                        if ui.button("Save").clicked() {
-                            let _ = self.save_file();
-                            self.execute_pending_action();
-                            self.show_save_confirmation = false;
-                        }
-                        if ui.button("Don't Save").clicked() {
-                            self.execute_pending_action();
-                            self.show_save_confirmation = false;
-                        }
-                        if ui.button("Cancel").clicked() {
-                            self.pending_action = None;
-                            self.show_save_confirmation = false;
-                        }
-                    });
-                });
+            egui::Window::new("Unsaved Changes").show(ctx, |ui| {
+                ui.label("Save changes?");
+                if ui.button("Save").clicked() {
+                    let _ = self.save_file();
+                    self.execute_pending();
+                    self.show_save_confirmation = false;
+                }
+                if ui.button("Discard").clicked() {
+                    self.execute_pending();
+                    self.show_save_confirmation = false;
+                }
+                if ui.button("Cancel").clicked() {
+                    self.pending_action = None;
+                    self.show_save_confirmation = false;
+                }
+            });
         }
     }
 
-    fn execute_pending_action(&mut self) {
+    fn execute_pending(&mut self) {
         if let Some(action) = self.pending_action.take() {
             match action {
-                PendingAction::OpenFile(path) => {
-                    let _ = self.open_file(path);
-                }
-                PendingAction::InsertImage => {
-                    let _ = self.insert_image();
-                }
-                PendingAction::NewFile => {
-                    // Future: create new file
+                PendingAction::OpenFile(p) => {
+                    let _ = self.open_file(p);
                 }
             }
         }
     }
+
+    // Decode Palette for Visualization
+    fn get_preview_palette(&self) -> Option<Vec<egui::Color32>> {
+        if !self.texture_view.format.is_ci() {
+            return None;
+        }
+
+        let raw_bytes = self.palette_manager.get_palette_data(
+            &self.file_buffer,
+            self.texture_view.palette_offset,
+            self.texture_view.split_palette_enabled,
+            self.texture_view.split_palette_offset,
+        );
+
+        let mut colors = Vec::new();
+        for chunk in raw_bytes.chunks(2) {
+            if chunk.len() == 2 {
+                let val = u16::from_be_bytes([chunk[0], chunk[1]]);
+
+                let r5 = (val >> 11) & 0x1F;
+                let g5 = (val >> 6) & 0x1F;
+                let b5 = (val >> 1) & 0x1F;
+                let a1 = val & 0x01;
+
+                let r8 = (r5 << 3) | (r5 >> 2);
+                let g8 = (g5 << 3) | (g5 >> 2);
+                let b8 = (b5 << 3) | (b5 >> 2);
+                let a8 = if a1 == 1 { 255 } else { 0 };
+
+                colors.push(egui::Color32::from_rgba_unmultiplied(
+                    r8 as u8, g8 as u8, b8 as u8, a8,
+                ));
+            }
+        }
+        Some(colors)
+    }
 }
 
 impl eframe::App for Texture64App {
-    fn save(&mut self, _storage: &mut dyn eframe::Storage) {
-        // Settings persistence disabled for now - Color32 serialization issues
-    }
+    fn save(&mut self, _storage: &mut dyn eframe::Storage) {}
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let mut actions = self.check_input(ctx);
         self.handle_file_drop(ctx);
-        self.check_shortcuts(ctx);
         self.ui_save_confirmation(ctx);
 
-        crate::ui::render_ui(self, ctx);
+        // Calculate palette for UI
+        let palette_preview = self.get_preview_palette();
+
+        // Pass calculated palette to render_ui
+        let ui_actions = crate::ui::render_ui(self, ctx, palette_preview.as_deref());
+        actions.extend(ui_actions);
+
+        for action in actions {
+            self.process_action(action);
+        }
     }
 }

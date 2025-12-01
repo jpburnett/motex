@@ -9,6 +9,7 @@ pub struct PaletteManager {
     external_palette_path: Option<PathBuf>,
 }
 
+#[allow(dead_code)]
 impl PaletteManager {
     pub fn new() -> Self {
         Self::default()

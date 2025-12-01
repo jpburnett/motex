@@ -1,3 +1,4 @@
+mod actions; // Register the new module
 mod app;
 mod file_buffer;
 mod palette_manager;
@@ -20,6 +21,6 @@ fn main() -> eframe::Result<()> {
     eframe::run_native(
         "Motex - N64 Texture Viewer",
         native_options,
-        Box::new(|cc| Ok(Box::<app::Texture64App>::default())),
+        Box::new(|_cc| Ok(Box::<app::Texture64App>::default())),
     )
 }

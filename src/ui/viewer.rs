@@ -1,160 +1,97 @@
-use crate::app::Texture64App;
+use crate::actions::AppAction;
 use crate::texture_view::ScrollMode;
 use eframe::egui;
 
-pub fn render_viewer(app: &mut Texture64App, ui: &mut egui::Ui, ctx: &egui::Context) {
-    // Left panel for offset controls
-    egui::SidePanel::left("left_panel")
-        .resizable(true)
-        .default_width(200.0)
-        .show_inside(ui, |ui| {
-            ui.heading("Offset Control");
-            ui.separator();
+pub fn render_viewer(
+    ui: &mut egui::Ui,
+    ctx: &egui::Context,
+    texture_handle: &mut Option<egui::TextureHandle>,
+    current_rgba: &Option<Vec<u8>>,
+    width: u32,
+    height: u32,
+    scale: f32,
+    background_color: egui::Color32,
+    hovered_pixel: &mut Option<(usize, usize, egui::Color32)>,
+) -> Vec<AppAction> {
+    let mut actions = Vec::new();
 
-            ui.label("Current Offset:");
-            let mut offset_changed = false;
-            if ui
-                .add(
-                    egui::DragValue::new(&mut app.texture_view.offset)
-                        .speed(1)
-                        .range(0..=app.file_buffer.len().saturating_sub(1))
-                        .hexadecimal(8, false, true),
-                )
-                .changed()
-            {
-                offset_changed = true;
-            }
-
-            ui.separator();
-
-            ui.label("Quick Jump:");
-            ui.horizontal(|ui| {
-                if ui.button("-1000").clicked() {
-                    app.texture_view
-                        .adjust_offset(-1000, app.file_buffer.len(), ScrollMode::Pixel);
-                    offset_changed = true;
-                }
-                if ui.button("+1000").clicked() {
-                    app.texture_view
-                        .adjust_offset(1000, app.file_buffer.len(), ScrollMode::Pixel);
-                    offset_changed = true;
-                }
-            });
-            ui.horizontal(|ui| {
-                if ui.button("-100").clicked() {
-                    app.texture_view
-                        .adjust_offset(-100, app.file_buffer.len(), ScrollMode::Pixel);
-                    offset_changed = true;
-                }
-                if ui.button("+100").clicked() {
-                    app.texture_view
-                        .adjust_offset(100, app.file_buffer.len(), ScrollMode::Pixel);
-                    offset_changed = true;
-                }
-            });
-            ui.horizontal(|ui| {
-                if ui.button("-10").clicked() {
-                    app.texture_view
-                        .adjust_offset(-10, app.file_buffer.len(), ScrollMode::Pixel);
-                    offset_changed = true;
-                }
-                if ui.button("+10").clicked() {
-                    app.texture_view
-                        .adjust_offset(10, app.file_buffer.len(), ScrollMode::Pixel);
-                    offset_changed = true;
-                }
-            });
-
-            ui.separator();
-
-            ui.label("Texture Size:");
-            ui.label(format!("{} bytes", app.texture_view.texture_size_bytes()));
-
-            ui.separator();
-
-            ui.label("Mouse Controls:");
-            ui.label("• Click: Set offset to pixel");
-            ui.label("• Scroll: Move by 4 rows");
-            ui.label("• Shift+Scroll: Move by 1 row");
-            ui.label("• Ctrl+Scroll: Move by image");
-            ui.label("• Alt+Scroll: Move by pixel");
-
-            ui.separator();
-
-            ui.checkbox(&mut app.show_pixel_info, "Show Pixel Info");
-
-            if offset_changed {
-                app.update_texture();
+    // Just a scroll area for the image. No side panels.
+    egui::ScrollArea::both()
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            if let Some(rgba_data) = current_rgba {
+                render_texture_image(
+                    ui,
+                    ctx,
+                    texture_handle,
+                    rgba_data,
+                    width,
+                    height,
+                    scale,
+                    background_color,
+                    hovered_pixel,
+                    &mut actions,
+                );
+            } else {
+                ui.centered_and_justified(|ui| {
+                    ui.label(
+                        egui::RichText::new("Drag and drop a file\nor use File > Open")
+                            .size(18.0)
+                            .weak(),
+                    );
+                });
             }
         });
 
-    // Central texture viewer
-    egui::CentralPanel::default().show_inside(ui, |ui| {
-        let available_size = ui.available_size();
-
-        egui::ScrollArea::both()
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                // Clone the RGBA data to avoid borrow issues
-                if let Some(rgba_data) = app.texture_view.current_rgba.clone() {
-                    render_texture_image(app, ui, ctx, &rgba_data, available_size);
-                } else {
-                    ui.centered_and_justified(|ui| {
-                        ui.label("No file loaded. Drag and drop a file or use File > Open");
-                    });
-                }
-            });
-    });
+    actions
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_texture_image(
-    app: &mut Texture64App,
     ui: &mut egui::Ui,
     ctx: &egui::Context,
+    texture_handle: &mut Option<egui::TextureHandle>,
     rgba_data: &[u8],
-    _available_size: egui::Vec2,
+    width: u32,
+    height: u32,
+    scale: f32,
+    background_color: egui::Color32,
+    hovered_pixel: &mut Option<(usize, usize, egui::Color32)>,
+    actions: &mut Vec<AppAction>,
 ) {
-    let width = app.texture_view.width as usize;
-    let height = app.texture_view.height as usize;
-    let scale = app.scale;
-    let background_color = app.background_color;
+    let w_usize = width as usize;
+    let h_usize = height as usize;
 
-    // Create or update texture - do this first to avoid borrow issues
-    if app.texture_handle.is_none() {
+    if texture_handle.is_none() {
         let tex = ctx.load_texture(
             "texture_view",
-            egui::ColorImage::from_rgba_unmultiplied([width, height], rgba_data),
+            egui::ColorImage::from_rgba_unmultiplied([w_usize, h_usize], rgba_data),
             egui::TextureOptions::NEAREST,
         );
-        app.texture_handle = Some(tex);
-    }
-
-    // Update existing texture
-    if let Some(texture) = &mut app.texture_handle {
-        if rgba_data.len() == width * height * 4 {
+        *texture_handle = Some(tex);
+    } else if let Some(texture) = texture_handle {
+        if rgba_data.len() == w_usize * h_usize * 4 {
             texture.set(
-                egui::ColorImage::from_rgba_unmultiplied([width, height], rgba_data),
+                egui::ColorImage::from_rgba_unmultiplied([w_usize, h_usize], rgba_data),
                 egui::TextureOptions::NEAREST,
             );
         }
     }
 
-    // Get texture ID - extract it before the closure
-    let texture_id = app.texture_handle.as_ref().map(|t| t.id());
+    let texture_id = texture_handle.as_ref().map(|t| t.id());
 
     if let Some(texture_id) = texture_id {
         let scaled_size = egui::vec2(width as f32 * scale, height as f32 * scale);
 
-        // Create a frame with the background color
         let frame = egui::Frame::default()
             .fill(background_color)
-            .inner_margin(10.0);
+            .inner_margin(20.0) // More breathing room
+            .shadow(egui::Shadow::default()); // Nice drop shadow
 
         frame.show(ui, |ui| {
             let (rect, response) =
                 ui.allocate_exact_size(scaled_size, egui::Sense::click_and_drag());
 
-            // Draw the texture
             ui.painter().image(
                 texture_id,
                 rect,
@@ -162,63 +99,51 @@ fn render_texture_image(
                 egui::Color32::WHITE,
             );
 
-            // Handle mouse interactions
-            handle_mouse_interaction(app, &response, rect, width, height);
-
-            // Show context menu on right-click
-            response.context_menu(|ui| {
-                if ui.button("Export to PNG...").clicked() {
-                    let _ = app.export_texture();
-                    ui.close();
-                }
-                if ui.button("Copy to Clipboard").clicked() {
-                    let _ = app.copy_to_clipboard();
-                    ui.close();
-                }
-                ui.separator();
-                if ui.button("Set Palette Offset Here").clicked() {
-                    if app.texture_view.format.is_ci() {
-                        app.texture_view.palette_offset = app.texture_view.offset;
-                        app.update_texture();
-                    }
-                    ui.close();
-                }
-            });
+            handle_interactions(
+                ui,
+                &response,
+                rect,
+                w_usize,
+                h_usize,
+                scale,
+                rgba_data,
+                hovered_pixel,
+                actions,
+            );
         });
     }
 }
 
-fn handle_mouse_interaction(
-    app: &mut Texture64App,
+fn handle_interactions(
+    _ui: &egui::Ui,
     response: &egui::Response,
     rect: egui::Rect,
     width: usize,
     height: usize,
+    scale: f32,
+    rgba_data: &[u8],
+    hovered_pixel: &mut Option<(usize, usize, egui::Color32)>,
+    actions: &mut Vec<AppAction>,
 ) {
-    // Handle left click to set offset
-    if response.clicked() {
-        if let Some(pos) = response.interact_pointer_pos() {
-            let relative_pos = pos - rect.min;
-            let x = (relative_pos.x / app.scale).floor() as usize;
-            let y = (relative_pos.y / app.scale).floor() as usize;
-
-            if x < width && y < height {
-                app.texture_view.set_offset_from_click(x, y);
-                app.update_texture();
-            }
+    response.context_menu(|ui| {
+        if ui.button("Export to PNG...").clicked() {
+            actions.push(AppAction::ExportTextureDialog);
+            ui.close();
         }
-    }
+        if ui.button("Copy to Clipboard").clicked() {
+            actions.push(AppAction::CopyToClipboard);
+            ui.close();
+        }
+    });
 
-    // Handle mouse wheel scrolling
+    // Handle Scroll
     if response.hovered() {
         let scroll_delta = response.ctx.input(|i| i.smooth_scroll_delta.y);
-
         if scroll_delta != 0.0 {
             let scroll_amount = if scroll_delta > 0.0 { -1 } else { 1 };
-
             let modifiers = response.ctx.input(|i| i.modifiers);
 
-            let scroll_mode = if modifiers.shift {
+            let mode = if modifiers.shift {
                 ScrollMode::Row
             } else if modifiers.ctrl {
                 ScrollMode::Image
@@ -228,33 +153,35 @@ fn handle_mouse_interaction(
                 ScrollMode::FourRows
             };
 
-            app.texture_view
-                .adjust_offset(scroll_amount, app.file_buffer.len(), scroll_mode);
-            app.update_texture();
+            actions.push(AppAction::AdjustOffset {
+                delta: scroll_amount,
+                mode,
+            });
         }
     }
 
-    // Track hovered pixel for info display
+    // Hover Info
     if let Some(pos) = response.hover_pos() {
         let relative_pos = pos - rect.min;
-        let x = (relative_pos.x / app.scale).floor() as usize;
-        let y = (relative_pos.y / app.scale).floor() as usize;
+        let x = (relative_pos.x / scale).floor() as usize;
+        let y = (relative_pos.y / scale).floor() as usize;
 
         if x < width && y < height {
-            if let Some(rgba_data) = &app.texture_view.current_rgba {
-                let pixel_index = (y * width + x) * 4;
-                if pixel_index + 3 < rgba_data.len() {
-                    let r = rgba_data[pixel_index];
-                    let g = rgba_data[pixel_index + 1];
-                    let b = rgba_data[pixel_index + 2];
-                    let a = rgba_data[pixel_index + 3];
-
-                    app.hovered_pixel =
-                        Some((x, y, egui::Color32::from_rgba_unmultiplied(r, g, b, a)));
-                }
+            let pixel_index = (y * width + x) * 4;
+            if pixel_index + 3 < rgba_data.len() {
+                *hovered_pixel = Some((
+                    x,
+                    y,
+                    egui::Color32::from_rgba_unmultiplied(
+                        rgba_data[pixel_index],
+                        rgba_data[pixel_index + 1],
+                        rgba_data[pixel_index + 2],
+                        rgba_data[pixel_index + 3],
+                    ),
+                ));
             }
         }
     } else {
-        app.hovered_pixel = None;
+        *hovered_pixel = None;
     }
 }

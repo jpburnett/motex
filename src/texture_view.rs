@@ -116,17 +116,37 @@ impl TextureViewState {
         let size = (self.width * self.height) as usize;
         let bytes_needed = (size as f32 * self.format.bytes_per_pixel()).ceil() as usize;
 
-        if let Some(data) = buffer.get_slice(self.offset, bytes_needed) {
-            // Use pigment64 to decode the texture
-            match self.decode_texture(data, palette) {
-                Ok(rgba) => self.current_rgba = Some(rgba),
-                Err(e) => {
-                    log::error!("Failed to decode texture: {}", e);
-                    self.current_rgba = None;
+        // Attempt to get the data slice
+        let raw_slice = buffer.get_slice(self.offset, bytes_needed);
+
+        match raw_slice {
+            Some(data) if data.len() == bytes_needed => {
+                // Case 1: We have all the data we need
+                match self.decode_texture(data, palette) {
+                    Ok(rgba) => self.current_rgba = Some(rgba),
+                    Err(e) => {
+                        log::warn!("Failed to decode texture: {}", e);
+                        self.current_rgba = None;
+                    }
                 }
             }
-        } else {
-            self.current_rgba = None;
+            Some(data) => {
+                // Case 2: Partial data (End of file). Pad with zeros.
+                let mut padded = data.to_vec();
+                padded.resize(bytes_needed, 0);
+
+                match self.decode_texture(&padded, palette) {
+                    Ok(rgba) => self.current_rgba = Some(rgba),
+                    Err(e) => {
+                        log::warn!("Failed to decode texture (padded): {}", e);
+                        self.current_rgba = None;
+                    }
+                }
+            }
+            None => {
+                // Case 3: Offset is completely out of bounds
+                self.current_rgba = None;
+            }
         }
     }
 
@@ -187,15 +207,18 @@ impl TextureViewState {
             ScrollMode::Image => bytes_per_image * delta,
         };
 
-        let new_offset = (self.offset as i64 + offset_delta).max(0);
-        self.offset = new_offset.min(buffer_size.saturating_sub(1) as i64) as usize;
+        // Apply delta
+        let new_offset = self.offset as i64 + offset_delta;
+
+        // Clamp
+        self.offset = new_offset.clamp(0, buffer_size.saturating_sub(1) as i64) as usize;
     }
 
-    pub fn set_offset_from_click(&mut self, x: usize, y: usize) {
-        let pixel_index = y * self.width as usize + x;
-        let byte_offset = (pixel_index as f32 * self.format.bytes_per_pixel()).floor() as usize;
-        self.offset += byte_offset;
-    }
+    // pub fn set_offset_from_click(&mut self, x: usize, y: usize) {
+    //     let pixel_index = y * self.width as usize + x;
+    //     let byte_offset = (pixel_index as f32 * self.format.bytes_per_pixel()).floor() as usize;
+    //     self.offset += byte_offset;
+    // }
 }
 
 #[derive(Debug, Clone, Copy)]

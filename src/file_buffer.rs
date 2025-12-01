@@ -11,6 +11,7 @@ pub struct FileBuffer {
     modified: bool,
 }
 
+#[allow(dead_code)]
 impl FileBuffer {
     pub fn new() -> Self {
         Self::default()
